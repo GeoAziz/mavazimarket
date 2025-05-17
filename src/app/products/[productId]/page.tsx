@@ -1,3 +1,4 @@
+
 import { mockProducts, mockReviews } from '@/lib/mock-data';
 import type { Product } from '@/lib/types';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
@@ -7,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Heart, HelpCircle, Ruler, Send, ShoppingCart, StarIcon, Truck } from 'lucide-react';
+import { Heart, HelpCircle, Ruler, Send, ShoppingCart, Star, Truck } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import React from 'react'; // Added React import for Fragment
 
 export async function generateStaticParams() {
   return mockProducts.map((product) => ({
@@ -28,12 +30,11 @@ export default function ProductPage({ params }: ProductPageProps) {
   const product = mockProducts.find(p => p.slug === params.productId);
 
   if (!product) {
-    // Or redirect to a 404 page
     return <div className="text-center py-10">Product not found.</div>;
   }
 
   const relatedProducts = mockProducts.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
-  const productReviews = product.reviews || mockReviews.slice(0,2); // Fallback to generic reviews if specific not set
+  const productReviews = product.reviews || mockReviews.slice(0,2);
 
   return (
     <div className="space-y-10">
@@ -44,12 +45,10 @@ export default function ProductPage({ params }: ProductPageProps) {
       ]} />
 
       <div className="grid md:grid-cols-2 gap-8 lg:gap-12">
-        {/* Image Carousel */}
         <div className="md:sticky md:top-24 self-start">
           <ImageCarousel images={product.images} altText={product.name} dataAiHint={product.dataAiHint} />
         </div>
 
-        {/* Product Information */}
         <div className="space-y-6">
           <h1 className="text-3xl lg:text-4xl font-bold text-primary">{product.name}</h1>
           
@@ -63,32 +62,31 @@ export default function ProductPage({ params }: ProductPageProps) {
           
           <p className="text-muted-foreground leading-relaxed">{product.description.substring(0,150)}...</p>
 
-          {/* Color Options */}
           {product.colors && product.colors.length > 0 && (
             <div>
               <Label className="text-sm font-medium">Color: <span className="text-muted-foreground">Selected Color</span></Label>
               <RadioGroup defaultValue={product.colors[0].toLowerCase()} className="flex space-x-2 mt-2">
                 {product.colors.map(color => (
-                  <RadioGroupItem 
-                    key={color} 
-                    value={color.toLowerCase()} 
-                    id={`color-${color.toLowerCase()}`} 
-                    className="sr-only peer" 
-                  />
-                   <Label 
-                    htmlFor={`color-${color.toLowerCase()}`}
-                    className="h-8 w-8 rounded-full border-2 border-transparent peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary peer-data-[state=checked]:ring-offset-2 cursor-pointer transition-all"
-                    style={{ backgroundColor: color.toLowerCase() === 'white' ? '#f0f0f0' : color.toLowerCase() }}
-                    title={color}
-                  >
-                    <span className="sr-only">{color}</span>
-                  </Label>
+                  <React.Fragment key={color}>
+                    <RadioGroupItem 
+                      value={color.toLowerCase()} 
+                      id={`color-${color.toLowerCase()}`} 
+                      className="sr-only peer" 
+                    />
+                    <Label 
+                      htmlFor={`color-${color.toLowerCase()}`}
+                      className="h-8 w-8 rounded-full border-2 border-transparent peer-data-[state=checked]:ring-2 peer-data-[state=checked]:ring-primary peer-data-[state=checked]:ring-offset-2 cursor-pointer transition-all"
+                      style={{ backgroundColor: color.toLowerCase() === 'white' ? '#f0f0f0' : color.toLowerCase() }}
+                      title={color}
+                    >
+                      <span className="sr-only">{color}</span>
+                    </Label>
+                  </React.Fragment>
                 ))}
               </RadioGroup>
             </div>
           )}
 
-          {/* Size Selection */}
           {product.sizes && product.sizes.length > 0 && (
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -110,8 +108,6 @@ export default function ProductPage({ params }: ProductPageProps) {
             </div>
           )}
           
-          {/* Quantity - To be added if needed here, often handled in cart */}
-
           <div className="flex flex-col sm:flex-row gap-3 pt-4">
             <Button size="lg" className="flex-1 bg-primary hover:bg-primary/90 text-primary-foreground">
               <ShoppingCart size={20} className="mr-2" /> Add to Cart
@@ -144,11 +140,9 @@ export default function ProductPage({ params }: ProductPageProps) {
               </AccordionContent>
             </AccordionItem>
           </Accordion>
-
         </div>
       </div>
 
-      {/* Product Description & Reviews Tabs */}
       <Tabs defaultValue="description" className="w-full pt-8">
         <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 mb-6">
           <TabsTrigger value="description">Full Description</TabsTrigger>
@@ -158,7 +152,6 @@ export default function ProductPage({ params }: ProductPageProps) {
         <TabsContent value="description" className="prose max-w-none text-foreground">
           <h3 className="text-xl font-semibold mb-2">About This Product</h3>
           <p>{product.description}</p>
-          {/* Add more detailed description if available */}
           <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.</p>
         </TabsContent>
         <TabsContent value="reviews">
@@ -191,7 +184,7 @@ export default function ProductPage({ params }: ProductPageProps) {
             <div>
               <Label>Your Rating</Label>
               <div className="flex space-x-1 mt-1">
-                {[1,2,3,4,5].map(star => <Button key={star} variant="ghost" size="icon" className="text-gray-300 hover:text-yellow-400"><StarIcon/></Button>)}
+                {[1,2,3,4,5].map(star => <Button key={star} variant="ghost" size="icon" className="text-gray-300 hover:text-yellow-400"><Star /></Button>)}
               </div>
             </div>
             <div>
@@ -218,14 +211,14 @@ export default function ProductPage({ params }: ProductPageProps) {
         </TabsContent>
       </Tabs>
 
-      {/* Related Products - Placeholder */}
       {relatedProducts.length > 0 && (
         <section className="pt-10">
           <h2 className="text-2xl font-bold text-center mb-8 text-primary">You Might Also Like</h2>
-          {/* Use a product grid/carousel here, similar to homepage */}
           <p className="text-center text-muted-foreground">(Related products component to be implemented here)</p>
         </section>
       )}
     </div>
   );
 }
+
+    
