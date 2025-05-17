@@ -15,10 +15,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Edit3, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Save, Trash2 } from 'lucide-react';
 import Link from "next/link";
 import { mockProducts } from '@/lib/mock-data'; // For fetching mock product data
-import { useEffect } from "react";
+import { useEffect, use } from "react"; // Modified import to include 'use'
 
 interface EditProductPageProps {
-  params: { slug: string };
+  params: { slug: string }; // The prop received might be a Promise, but React.use will resolve it to this type.
 }
 
 // Same schema as add product page
@@ -41,7 +41,9 @@ const productFormSchema = z.object({
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
-export default function AdminEditProductPage({ params }: EditProductPageProps) {
+export default function AdminEditProductPage({ params: paramsProp }: EditProductPageProps) {
+  // Use React.use to unwrap the params if it's a Promise, as suggested by the Next.js warning.
+  const params = use(paramsProp);
   const { slug } = params;
   const productToEdit = mockProducts.find(p => p.slug === slug);
 
@@ -69,7 +71,7 @@ export default function AdminEditProductPage({ params }: EditProductPageProps) {
         isPublished: productToEdit.stockQuantity > 0, // Example logic
       });
     }
-  }, [productToEdit, form]);
+  }, [productToEdit, form, slug]); // Added slug to dependencies as productToEdit depends on it.
 
 
   function onSubmit(data: ProductFormValues) {
@@ -77,7 +79,7 @@ export default function AdminEditProductPage({ params }: EditProductPageProps) {
     alert("Product updated successfully! (Mock)");
   }
 
-  if (!productToEdit) {
+  if (!productToEdit && slug) { // Check slug as well to avoid premature "not found" if params are still resolving.
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold text-destructive">Product Not Found</h1>
@@ -86,12 +88,18 @@ export default function AdminEditProductPage({ params }: EditProductPageProps) {
       </div>
     );
   }
+  
+  if (!productToEdit && !slug) {
+     // Still loading or params not available yet
+    return <div>Loading product details...</div>;
+  }
+
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold text-primary flex items-center">
-          <Edit3 size={30} className="mr-3 text-accent" /> Edit Product: {productToEdit.name}
+          <Edit3 size={30} className="mr-3 text-accent" /> Edit Product: {productToEdit?.name || slug}
         </h1>
          <Button variant="outline" asChild>
             <Link href="/admin/products">Back to Product List</Link>
@@ -188,7 +196,7 @@ export default function AdminEditProductPage({ params }: EditProductPageProps) {
                   <FormField control={form.control} name="category" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                       <Select onValueChange={field.onChange} defaultValue={field.value}>
+                       <Select onValueChange={field.onChange} value={field.value || ""}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="men">Men</SelectItem>
@@ -248,7 +256,7 @@ export default function AdminEditProductPage({ params }: EditProductPageProps) {
               <Trash2 size={18} className="mr-2" /> Delete Product
             </Button>
             <div className="space-x-2">
-                <Button type="button" variant="outline" onClick={() => form.reset(productToEdit ? {
+                <Button type="button" variant="outline" onClick={() => productToEdit && form.reset({
                      name: productToEdit.name,
                     description: productToEdit.description,
                     price: productToEdit.price,
@@ -263,7 +271,7 @@ export default function AdminEditProductPage({ params }: EditProductPageProps) {
                     colors: productToEdit.colors.join(','),
                     tags: productToEdit.tags?.join(','),
                     isPublished: productToEdit.stockQuantity > 0,
-                } : {})}>
+                })}>
                 Reset Changes
                 </Button>
                 <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
@@ -276,4 +284,3 @@ export default function AdminEditProductPage({ params }: EditProductPageProps) {
     </div>
   );
 }
-
