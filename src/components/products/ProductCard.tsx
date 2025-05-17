@@ -1,3 +1,4 @@
+
 "use client";
 
 import Image from 'next/image';
@@ -5,19 +6,46 @@ import Link from 'next/link';
 import type { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShoppingCart, Eye } from 'lucide-react';
+import { ShoppingCart, Eye, Heart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { useToast } from '@/hooks/use-toast'; // For user feedback
 
 interface ProductCardProps {
   product: Product;
 }
 
 export function ProductCard({ product }: ProductCardProps) {
+  const { toast } = useToast();
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent link navigation if icons are clicked
+    e.stopPropagation();
+    console.log('Add to cart:', product.id, product.name);
+    toast({
+      title: "Added to Cart",
+      description: `${product.name} has been added to your cart.`,
+      variant: "default",
+    });
+    // Actual cart logic will be added later
+  };
+
+  const handleAddToWishlist = (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent link navigation
+    e.stopPropagation();
+    console.log('Add to wishlist:', product.id, product.name);
+    toast({
+      title: "Added to Wishlist",
+      description: `${product.name} has been added to your wishlist.`,
+      variant: "default",
+    });
+    // Actual wishlist logic will be added later
+  };
+
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 rounded-lg flex flex-col h-full group">
-      <Link href={`/products/${product.slug}`} className="block">
-        <CardHeader className="p-0 relative">
-          <div className="aspect-[3/4] w-full overflow-hidden">
+      <Link href={`/products/${product.slug}`} className="block relative">
+        <CardHeader className="p-0">
+          <div className="aspect-[3/4] w-full overflow-hidden relative">
              <Image
               src={product.images[0]}
               alt={product.name}
@@ -26,22 +54,43 @@ export function ProductCard({ product }: ProductCardProps) {
               className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
               data-ai-hint={product.dataAiHint || 'fashion clothing'}
             />
+            {/* Hover icons overlay */}
+            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background/70 hover:bg-background text-primary rounded-full h-10 w-10"
+                onClick={handleAddToCart}
+                aria-label="Add to cart"
+              >
+                <ShoppingCart size={20} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background/70 hover:bg-background text-destructive rounded-full h-10 w-10"
+                onClick={handleAddToWishlist}
+                aria-label="Add to wishlist"
+              >
+                <Heart size={20} />
+              </Button>
+            </div>
           </div>
           {product.tags?.includes('new-arrival') && (
-            <Badge variant="default" className="absolute top-2 left-2 bg-accent text-accent-foreground">New</Badge>
+            <Badge variant="default" className="absolute top-2 left-2 bg-accent text-accent-foreground z-10">New</Badge>
           )}
           {product.tags?.includes('sale') && (
-            <Badge variant="destructive" className="absolute top-2 right-2">Sale</Badge>
+            <Badge variant="destructive" className="absolute top-2 right-2 z-10">Sale</Badge>
           )}
         </CardHeader>
       </Link>
       <CardContent className="p-4 flex-grow">
         <Link href={`/products/${product.slug}`} className="block">
-          <CardTitle className="text-lg font-semibold leading-tight mb-1 group-hover:text-primary transition-colors truncate">
+          <CardTitle className="text-lg font-semibold leading-tight mb-1 group-hover:text-primary transition-colors truncate" title={product.name}>
             {product.name}
           </CardTitle>
         </Link>
-        <p className="text-sm text-muted-foreground mb-2">{product.brand || product.category}</p>
+        <p className="text-sm text-muted-foreground mb-2 truncate">{product.brand || product.category}</p>
         <p className="text-xl font-bold text-primary">KSh {product.price.toLocaleString()}</p>
         {product.averageRating && (
           <div className="flex items-center mt-1">
@@ -55,16 +104,18 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
       </CardContent>
       <CardFooter className="p-4 pt-0 mt-auto">
-        <div className="w-full flex flex-col sm:flex-row gap-2">
-          <Button variant="outline" className="flex-1 border-primary text-primary hover:bg-primary hover:text-primary-foreground" asChild>
+        {/* The "Quick View" button can remain or be removed if the hover icons are preferred for primary actions */}
+        <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground" asChild>
             <Link href={`/products/${product.slug}`}>
               <Eye size={18} className="mr-2" /> Quick View
             </Link>
-          </Button>
-          <Button className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground" onClick={() => console.log('Add to cart:', product.id)}>
+        </Button>
+        {/* The "Add to Cart" button here can be removed if the hover icon is sufficient, or styled differently */}
+        {/* For example, keep it as a secondary way to add to cart:
+        <Button className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground mt-2 sm:mt-0 sm:ml-2" onClick={handleAddToCart}>
             <ShoppingCart size={18} className="mr-2" /> Add to Cart
-          </Button>
-        </div>
+        </Button>
+        */}
       </CardFooter>
     </Card>
   );
