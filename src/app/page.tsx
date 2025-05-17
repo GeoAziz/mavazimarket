@@ -29,13 +29,13 @@ export default function HomePage() {
             Explore the freshest collections for men, women, and kids. Quality fashion, uniquely Kenyan.
           </p>
           <div className="space-x-2 md:space-x-4">
-            <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-8 py-3 text-lg" asChild>
+            <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-8 py-3 text-lg transition-all ease-in-out duration-300" asChild>
               <Link href="/#featured-products">Shop Now</Link>
             </Button>
             <Button size="lg" variant="outline" className="bg-white/20 hover:bg-white/30 text-white border-white rounded-full px-8 py-3 text-lg backdrop-blur-sm" asChild>
               <Link href="/#new-arrivals">New Arrivals</Link>
             </Button>
-             <Button size="lg" variant="outline" className="bg-accent/80 hover:bg-accent text-accent-foreground border-accent rounded-full px-8 py-3 text-lg backdrop-blur-sm" asChild>
+            <Button size="lg" variant="outline" className="bg-accent/80 hover:bg-accent text-accent-foreground border-accent rounded-full px-8 py-3 text-lg backdrop-blur-sm" asChild>
               <Link href="/sale">Sale</Link>
             </Button>
           </div>
@@ -59,7 +59,7 @@ export default function HomePage() {
                       className="group-hover:scale-105 transition-transform duration-300"
                       data-ai-hint={category.dataAiHint || 'fashion category'}
                     />
-                     <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors duration-300"></div>
+                    <div className="absolute inset-0 bg-black/30 group-hover:bg-black/10 transition-colors duration-300"></div>
                   </div>
                 </CardHeader>
                 <CardContent className="p-6 bg-background">
@@ -86,17 +86,17 @@ export default function HomePage() {
           ))}
         </div>
         <div className="text-center mt-12">
-          <Button size="lg" variant="outline" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-full px-8 py-3 text-lg" asChild>
+          <Button size="lg" variant="outline" className="border-primary text-primary hover:bg-primary hover:text-primary-foreground rounded-full px-8 py-3 text-lg transition-all ease-in-out duration-300" asChild>
             <Link href="/products">View All Products</Link>
           </Button>
         </div>
       </section>
-      
-      {/* New Arrivals Section - can be similar to Featured or a different layout */}
+
+      {/* New Arrivals Section */}
       <section id="new-arrivals">
         <h2 className="text-3xl font-bold text-center mb-10 text-primary">New Arrivals</h2>
-         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8">
-          {mockProducts.filter(p => p.tags?.includes('new-arrival')).slice(0,4).map((product) => (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 md:gap-8">
+          {mockProducts.filter(p => p.tags?.includes('new-arrival')).slice(0, 4).map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
@@ -109,7 +109,7 @@ export default function HomePage() {
         <p className="text-lg text-secondary-foreground mb-6 max-w-xl mx-auto">
           Let our AI Style Advisor help you find the perfect look based on your preferences and purchase history.
         </p>
-        <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground rounded-full px-8" asChild>
+        <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground rounded-full px-8 transition-all ease-in-out duration-300" asChild>
           <Link href="/style-advisor">Try it Now</Link>
         </Button>
       </section>
