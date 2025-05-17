@@ -8,13 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShoppingCart, Eye, Heart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast'; // For user feedback
+import { useToast } from '@/hooks/use-toast';
 
 interface ProductCardProps {
   product: Product;
+  onOpenQuickView: (product: Product) => void; // New prop
 }
 
-export function ProductCard({ product }: ProductCardProps) {
+export function ProductCard({ product, onOpenQuickView }: ProductCardProps) {
   const { toast } = useToast();
 
   const handleAddToCart = (e: React.MouseEvent) => {
@@ -39,17 +40,10 @@ export function ProductCard({ product }: ProductCardProps) {
     });
   };
 
-  const handleQuickView = (e: React.MouseEvent) => {
+  const handleQuickViewClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    console.log('Quick View for:', product.id, product.name);
-    toast({
-        title: "Quick View",
-        description: `Displaying quick view for ${product.name}. (Modal to be implemented)`,
-        variant: "default",
-    });
-    // In a future step, this would open a modal, e.g., by calling a prop function:
-    // onOpenQuickView(product);
+    onOpenQuickView(product);
   };
 
   return (
@@ -115,7 +109,7 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
       </CardContent>
       <CardFooter className="p-4 pt-0 mt-auto">
-        <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground" onClick={handleQuickView}>
+        <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground" onClick={handleQuickViewClick}>
             <Eye size={18} className="mr-2" /> Quick View
         </Button>
       </CardFooter>

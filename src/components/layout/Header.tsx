@@ -2,31 +2,21 @@
 "use client";
 
 import Link from 'next/link';
-import { Search, ShoppingCart, User, Menu as MenuIcon, X as XIcon, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, ShoppingCart, User, Menu as MenuIcon, X as XIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion"
 import { useState } from 'react';
 import type { NavItem } from '@/lib/types';
-import { mockCategories } from '@/lib/mock-data';
+// mockCategories is no longer used directly for top-level nav items
 
 const navItems: NavItem[] = [
-  ...mockCategories.map(cat => ({
-    label: cat.name,
-    href: `/${cat.slug}`,
-    sublinks: cat.subcategories.map(subcat => ({
-      label: subcat.name,
-      href: `/${cat.slug}/${subcat.slug}`
-    }))
-  })),
+  // Categories are removed from top-level navigation
   { label: 'About Us', href: '/about' },
   { label: 'Contact Us', href: '/contact' },
+  { label: 'Sale', href: '/sale'},
+  // Consider adding a generic "Shop" or "All Products" link if desired, e.g.:
+  // { label: 'Shop', href: '/products' },
 ];
 
 export function Header() {
@@ -51,24 +41,10 @@ export function Header() {
         {/* Desktop Navigation */}
         <nav className="hidden lg:flex items-center space-x-4">
           {navItems.map((item) => (
-            item.sublinks ? (
-              <div key={item.label} className="relative group">
-                <Link href={item.href} className="text-foreground hover:text-primary transition-colors px-3 py-2 flex items-center">
-                  {item.label} <ChevronDown size={16} className="ml-1" />
-                </Link>
-                <div className="absolute left-0 mt-0 w-48 bg-background border border-border rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-20">
-                  {item.sublinks.map(sub => (
-                    <Link key={sub.label} href={sub.href} className="block px-4 py-2 text-sm text-foreground hover:bg-accent hover:text-accent-foreground">
-                      {sub.label}
-                    </Link>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <Link key={item.label} href={item.href} className="text-foreground hover:text-primary transition-colors px-3 py-2">
-                {item.label}
-              </Link>
-            )
+            // Simplified: No sublinks handled here as categories are removed from top nav
+            <Link key={item.label} href={item.href} className="text-foreground hover:text-primary transition-colors px-3 py-2">
+              {item.label}
+            </Link>
           ))}
         </nav>
 
@@ -82,7 +58,6 @@ export function Header() {
           <Link href="/cart" aria-label="Shopping Cart">
             <Button variant="ghost" size="icon" className="relative">
               <ShoppingCart className="h-6 w-6 text-foreground hover:text-primary" />
-              {/* Optional: Add a badge for cart items count */}
               {/* <span className="absolute -top-1 -right-1 bg-accent text-accent-foreground text-xs rounded-full h-4 w-4 flex items-center justify-center">3</span> */}
             </Button>
           </Link>
@@ -121,29 +96,17 @@ export function Header() {
                     </div>
                   </div>
 
-                  <nav className="flex-grow overflow-y-auto p-4">
-                    <Accordion type="single" collapsible className="w-full">
-                      {navItems.map((item) => (
-                        item.sublinks ? (
-                          <AccordionItem value={item.label} key={item.label}>
-                            <AccordionTrigger className="py-3 text-left hover:no-underline">
-                              <Link href={item.href} onClick={() => setIsMobileMenuOpen(false)} className="flex-1">{item.label}</Link>
-                            </AccordionTrigger>
-                            <AccordionContent className="pl-4">
-                              {item.sublinks.map(sub => (
-                                <Link key={sub.label} href={sub.href} onClick={() => setIsMobileMenuOpen(false)} className="block py-2 text-muted-foreground hover:text-primary">
-                                  {sub.label}
-                                </Link>
-                              ))}
-                            </AccordionContent>
-                          </AccordionItem>
-                        ) : (
-                          <Link key={item.label} href={item.href} onClick={() => setIsMobileMenuOpen(false)} className="block py-3 font-medium text-foreground hover:text-primary">
-                            {item.label}
-                          </Link>
-                        )
-                      ))}
-                    </Accordion>
+                  <nav className="flex-grow overflow-y-auto p-4 space-y-2">
+                     {/* Explicitly add category links for mobile if desired */}
+                    <Link href="/men" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 font-medium text-foreground hover:text-primary">Men</Link>
+                    <Link href="/women" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 font-medium text-foreground hover:text-primary">Women</Link>
+                    <Link href="/kids" onClick={() => setIsMobileMenuOpen(false)} className="block py-2 font-medium text-foreground hover:text-primary">Kids</Link>
+                    <hr className="my-2"/>
+                    {navItems.map((item) => (
+                      <Link key={item.label} href={item.href} onClick={() => setIsMobileMenuOpen(false)} className="block py-2 font-medium text-foreground hover:text-primary">
+                        {item.label}
+                      </Link>
+                    ))}
                   </nav>
                   <div className="p-4 border-t mt-auto">
                      <Link href="/login" onClick={() => setIsMobileMenuOpen(false)}>
