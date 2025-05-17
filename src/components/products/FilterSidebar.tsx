@@ -50,7 +50,7 @@ export function FilterSidebar({ currentCategorySlug }: FilterSidebarProps) {
         </Accordion>
       )}
 
-      <Accordion type="multiple" collapsible className="w-full" defaultValue={['price', 'color']}>
+      <Accordion type="multiple" className="w-full" defaultValue={['price', 'color']}>
         <AccordionItem value="price">
           <AccordionTrigger className="text-lg font-medium">Price Range (KSh)</AccordionTrigger>
           <AccordionContent className="pt-2">
