@@ -25,7 +25,6 @@ const productFormSchema = z.object({
   sku: z.string().optional(),
   brand: z.string().optional(),
   material: z.string().optional(),
-  // For simplicity, handling images, sizes, and colors as text for now
   images: z.string().optional().describe("Comma-separated image URLs"),
   sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)"),
   colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)"),
@@ -43,7 +42,15 @@ export default function AdminAddProductPage() {
       description: "",
       price: 0,
       category: "",
+      subcategory: "",
       stockQuantity: 0,
+      sku: "",
+      brand: "",
+      material: "",
+      images: "",
+      sizes: "",
+      colors: "",
+      tags: "",
       isPublished: true,
     },
   });
@@ -223,4 +230,3 @@ export default function AdminAddProductPage() {
     </div>
   );
 }
-

@@ -15,10 +15,10 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Edit3, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Save, Trash2 } from 'lucide-react';
 import Link from "next/link";
 import { mockProducts } from '@/lib/mock-data'; // For fetching mock product data
-import { useEffect, use } from "react"; // Modified import to include 'use'
+import { useEffect, use } from "react"; 
 
 interface EditProductPageProps {
-  params: { slug: string }; // The prop received might be a Promise, but React.use will resolve it to this type.
+  params: { slug: string }; 
 }
 
 // Same schema as add product page
@@ -42,7 +42,6 @@ const productFormSchema = z.object({
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
 export default function AdminEditProductPage({ params: paramsProp }: EditProductPageProps) {
-  // Use React.use to unwrap the params if it's a Promise, as suggested by the Next.js warning.
   const params = use(paramsProp);
   const { slug } = params;
   const productToEdit = mockProducts.find(p => p.slug === slug);
@@ -55,23 +54,23 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
   useEffect(() => {
     if (productToEdit) {
       form.reset({
-        name: productToEdit.name,
-        description: productToEdit.description,
+        name: productToEdit.name || '',
+        description: productToEdit.description || '',
         price: productToEdit.price,
-        category: productToEdit.category,
-        subcategory: productToEdit.subcategory,
+        category: productToEdit.category || '',
+        subcategory: productToEdit.subcategory || '',
         stockQuantity: productToEdit.stockQuantity,
-        sku: productToEdit.id, // Using id as SKU for mock
-        brand: productToEdit.brand,
-        material: productToEdit.material,
-        images: productToEdit.images.join(','),
-        sizes: productToEdit.sizes.join(','),
-        colors: productToEdit.colors.join(','),
-        tags: productToEdit.tags?.join(','),
+        sku: productToEdit.id || '', // Using id as SKU for mock
+        brand: productToEdit.brand || '',
+        material: productToEdit.material || '',
+        images: productToEdit.images?.join(',') || '',
+        sizes: productToEdit.sizes?.join(',') || '',
+        colors: productToEdit.colors?.join(',') || '',
+        tags: productToEdit.tags?.join(',') || '',
         isPublished: productToEdit.stockQuantity > 0, // Example logic
       });
     }
-  }, [productToEdit, form, slug]); // Added slug to dependencies as productToEdit depends on it.
+  }, [productToEdit, form, slug]); 
 
 
   function onSubmit(data: ProductFormValues) {
@@ -79,7 +78,7 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
     alert("Product updated successfully! (Mock)");
   }
 
-  if (!productToEdit && slug) { // Check slug as well to avoid premature "not found" if params are still resolving.
+  if (!productToEdit && slug) { 
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold text-destructive">Product Not Found</h1>
@@ -90,7 +89,6 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
   }
   
   if (!productToEdit && !slug) {
-     // Still loading or params not available yet
     return <div>Loading product details...</div>;
   }
 
@@ -257,19 +255,19 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
             </Button>
             <div className="space-x-2">
                 <Button type="button" variant="outline" onClick={() => productToEdit && form.reset({
-                     name: productToEdit.name,
-                    description: productToEdit.description,
+                    name: productToEdit.name || '',
+                    description: productToEdit.description || '',
                     price: productToEdit.price,
-                    category: productToEdit.category,
-                    subcategory: productToEdit.subcategory,
+                    category: productToEdit.category || '',
+                    subcategory: productToEdit.subcategory || '',
                     stockQuantity: productToEdit.stockQuantity,
-                    sku: productToEdit.id,
-                    brand: productToEdit.brand,
-                    material: productToEdit.material,
-                    images: productToEdit.images.join(','),
-                    sizes: productToEdit.sizes.join(','),
-                    colors: productToEdit.colors.join(','),
-                    tags: productToEdit.tags?.join(','),
+                    sku: productToEdit.id || '',
+                    brand: productToEdit.brand || '',
+                    material: productToEdit.material || '',
+                    images: productToEdit.images?.join(',') || '',
+                    sizes: productToEdit.sizes?.join(',') || '',
+                    colors: productToEdit.colors?.join(',') || '',
+                    tags: productToEdit.tags?.join(',') || '',
                     isPublished: productToEdit.stockQuantity > 0,
                 })}>
                 Reset Changes
