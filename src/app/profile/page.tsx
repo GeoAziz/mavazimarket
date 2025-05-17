@@ -3,6 +3,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
+import Image from 'next/image'; // Added this line
 import { mockUser, mockOrders, mockProducts } from '@/lib/mock-data';
 import type { Order, Product } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
