@@ -1,3 +1,4 @@
+
 import { ProductCard } from '@/components/products/ProductCard';
 import { FilterSidebar } from '@/components/products/FilterSidebar';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
@@ -6,8 +7,8 @@ import type { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Filter } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
+import { Filter, X } from 'lucide-react';
 
 export async function generateStaticParams() {
   return mockCategories.map((category) => ({
@@ -70,8 +71,19 @@ export default function CategoryPage({ params }: CategoryPageProps) {
                     <Filter size={16} className="mr-2" /> Filters
                   </Button>
                 </SheetTrigger>
-                <SheetContent side="left" className="w-[300px] sm:w-[350px] p-0">
-                  <FilterSidebar currentCategorySlug={category.slug} />
+                <SheetContent side="left" className="w-[300px] sm:w-[350px] p-0 flex flex-col">
+                  <SheetHeader className="p-4 border-b flex flex-row justify-between items-center">
+                    <SheetTitle className="text-xl">Filters</SheetTitle>
+                    <SheetClose asChild>
+                      <Button variant="ghost" size="icon">
+                        <X className="h-5 w-5" />
+                        <span className="sr-only">Close</span>
+                      </Button>
+                    </SheetClose>
+                  </SheetHeader>
+                  <div className="flex-grow overflow-y-auto">
+                    <FilterSidebar currentCategorySlug={category.slug} />
+                  </div>
                 </SheetContent>
               </Sheet>
             </div>
