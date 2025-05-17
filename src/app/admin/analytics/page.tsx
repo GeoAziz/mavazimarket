@@ -1,11 +1,14 @@
 
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, CalendarDays, DollarSign, Users, TrendingUp } from 'lucide-react';
+import { BarChart3, CalendarDays, DollarSign, Users, TrendingUp, ShoppingCart } from 'lucide-react'; // Added ShoppingCart
 // Example of using shadcn/ui charts (recharts wrapper)
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { useEffect, useState } from 'react'; // Added useState and useEffect
 
-const mockSalesData = [
+const generateMockSalesData = () => [
   { month: "Jan", sales: Math.floor(Math.random() * 5000) + 1000 },
   { month: "Feb", sales: Math.floor(Math.random() * 5000) + 1000 },
   { month: "Mar", sales: Math.floor(Math.random() * 5000) + 1000 },
@@ -22,6 +25,12 @@ const chartConfig = {
 } satisfies ChartConfig;
 
 export default function AdminAnalyticsPage() {
+  const [salesData, setSalesData] = useState<Array<{month: string, sales: number}>>([]);
+
+  useEffect(() => {
+    setSalesData(generateMockSalesData());
+  }, []);
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-primary flex items-center">
@@ -82,17 +91,21 @@ export default function AdminAnalyticsPage() {
           </div>
         </CardHeader>
         <CardContent className="pl-2">
-          <ChartContainer config={chartConfig} className="h-[300px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={mockSalesData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
-                <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `KSh ${value/1000}k`} />
-                <ChartTooltip content={<ChartTooltipContent />} />
-                <Legend />
-                <Bar dataKey="sales" fill="var(--color-sales)" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
+          {salesData.length > 0 ? (
+            <ChartContainer config={chartConfig} className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={salesData} margin={{ top: 5, right: 20, left: -20, bottom: 5 }}>
+                  <XAxis dataKey="month" stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `KSh ${value/1000}k`} />
+                  <ChartTooltip content={<ChartTooltipContent />} />
+                  <Legend />
+                  <Bar dataKey="sales" fill="var(--color-sales)" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartContainer>
+          ) : (
+            <div className="h-[300px] w-full flex items-center justify-center text-muted-foreground">Loading chart data...</div>
+          )}
         </CardContent>
       </Card>
       
@@ -108,4 +121,3 @@ export default function AdminAnalyticsPage() {
     </div>
   );
 }
-
