@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Search, ShoppingCart, User, Menu as MenuIcon, X as XIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetTrigger, SheetClose } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from '@/components/ui/sheet';
 import {
   Accordion,
   AccordionContent,
@@ -95,19 +95,22 @@ export function Header() {
                   <MenuIcon className="h-6 w-6 text-foreground" />
                 </Button>
               </SheetTrigger>
-              <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-background p-0">
-                <div className="flex flex-col h-full">
-                  <div className="flex justify-between items-center p-4 border-b">
+              <SheetContent side="right" className="w-[300px] sm:w-[400px] bg-background p-0 flex flex-col">
+                <SheetHeader className="flex flex-row justify-between items-center p-4 border-b">
+                  <SheetTitle asChild>
                     <Link href="/" className="text-xl font-bold text-primary" onClick={() => setIsMobileMenuOpen(false)}>
                       Mavazi<span className="text-accent">Market</span>
                     </Link>
-                    <SheetClose asChild>
-                      <Button variant="ghost" size="icon">
-                        <XIcon className="h-6 w-6" />
-                      </Button>
-                    </SheetClose>
-                  </div>
-                  
+                  </SheetTitle>
+                  <SheetClose asChild>
+                    <Button variant="ghost" size="icon">
+                      <XIcon className="h-6 w-6" />
+                      <span className="sr-only">Close menu</span>
+                    </Button>
+                  </SheetClose>
+                </SheetHeader>
+                
+                <div className="flex-grow flex flex-col">
                   {/* Mobile Search Bar */}
                   <div className="p-4 border-b md:hidden">
                     <div className="relative">
