@@ -1,3 +1,4 @@
+
 "use client";
 
 import Image from 'next/image';
@@ -8,9 +9,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
-import { Minus, Plus, Trash2, ShoppingBag, Info } from 'lucide-react';
+import { Minus, Plus, Trash2, ShoppingBag, Info, PackageOpen } from 'lucide-react'; // Added PackageOpen
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useState, useEffect } from 'react';
 
 
@@ -18,12 +19,14 @@ export default function CartPage() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   
   useEffect(() => {
-    // Simulate fetching cart items
     setCartItems(mockCartItems);
   }, []);
 
   const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity < 1) return; // Or remove item if quantity is 0
+    if (newQuantity < 1) { // Remove item if quantity becomes 0 or less
+      removeItem(id);
+      return;
+    }
     setCartItems(prevItems => 
       prevItems.map(item => item.id === id ? { ...item, quantity: newQuantity } : item)
     );
@@ -34,8 +37,8 @@ export default function CartPage() {
   };
 
   const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const taxes = subtotal * 0.16; // Example 16% VAT
-  const shippingFee = subtotal > 3000 ? 0 : 250; // Example: Free shipping over KSh 3000
+  const taxes = subtotal * 0.16; 
+  const shippingFee = subtotal > 3000 ? 0 : 250; 
   const total = subtotal + taxes + shippingFee;
 
   return (
@@ -47,17 +50,22 @@ export default function CartPage() {
       </div>
 
       {cartItems.length === 0 ? (
-        <Card className="text-center py-12 shadow-lg">
-          <CardHeader>
-             <ShoppingBag className="mx-auto h-16 w-16 text-muted-foreground mb-4" />
-            <CardTitle className="text-2xl font-semibold">Your Cart is Empty</CardTitle>
+        <Card className="text-center py-16 shadow-xl border-dashed border-muted-foreground/30 bg-secondary/30">
+          <CardHeader className="items-center">
+             <PackageOpen className="mx-auto h-24 w-24 text-primary mb-6" strokeWidth={1.5}/>
+            <CardTitle className="text-3xl font-semibold text-primary">Your Cart is Looking a Little Empty</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground mb-6">Looks like you haven't added anything to your cart yet.</p>
-            <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground" asChild>
-              <Link href="/">Continue Shopping</Link>
+            <p className="text-muted-foreground text-lg mb-8 max-w-md mx-auto">
+              Looks like you haven't added anything to your cart yet. Time to find some treasures!
+            </p>
+            <Button size="lg" className="bg-accent hover:bg-accent/90 text-accent-foreground rounded-full px-10 py-6 text-lg transition-transform hover:scale-105" asChild>
+              <Link href="/">Start Shopping</Link>
             </Button>
           </CardContent>
+           <CardFooter className="justify-center pt-6">
+             <p className="text-xs text-muted-foreground">Need help? <Link href="/contact" className="underline hover:text-primary">Contact us</Link></p>
+           </CardFooter>
         </Card>
       ) : (
         <div className="grid lg:grid-cols-3 gap-8">
@@ -74,7 +82,7 @@ export default function CartPage() {
                   data-ai-hint="product clothing"
                 />
                 <div className="flex-grow">
-                  <Link href={`/products/${item.id.replace('-01', '')}`} className="hover:underline"> {/* Assuming ID structure */}
+                  <Link href={`/products/${item.id.replace('-01', '')}`} className="hover:underline"> 
                     <h3 className="text-lg font-semibold text-foreground">{item.name}</h3>
                   </Link>
                   {item.size && <p className="text-sm text-muted-foreground">Size: {item.size}</p>}

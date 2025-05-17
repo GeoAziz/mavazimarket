@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from 'react';
@@ -5,44 +6,83 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { mockCategories } from '@/lib/mock-data';
-import type { Category as CategoryType } from '@/lib/types';
+
+export interface SelectedFilters {
+  subcategories: string[];
+  priceRange: [number, number];
+  colors: string[];
+  sizes: string[];
+  brands: string[];
+  materials: string[];
+}
 
 interface FilterSidebarProps {
   currentCategorySlug?: string;
+  onApplyFilters: (filters: SelectedFilters) => void;
+  onClearFilters: () => void;
 }
 
-const colors = ['Red', 'Blue', 'Green', 'Black', 'White', 'Yellow', 'Purple', 'Orange', 'Pink'];
-const sizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL'];
-const brands = ['Mavazi Basics', 'Denim Co.', 'Urban Riders', 'StepUp', 'Summer Vibes', 'Elegance', 'Little Champs', 'Tiny Tots', 'Vituko', 'Kitenge Wear'];
-const materials = ['Cotton', 'Leather', 'Denim', 'Silk', 'Polyester', 'Wool'];
+const allColors = ['Red', 'Blue', 'Green', 'Black', 'White', 'Yellow', 'Purple', 'Orange', 'Pink', 'Beige', 'Brown', 'Grey'];
+const allSizes = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '28W', '30W', '32W', '34W', '36W', '38W', '6', '7', '8', '9', '10', '11', '12'];
+const allBrands = ['Mavazi Basics', 'Denim Co.', 'Urban Riders', 'StepUp', 'Summer Vibes', 'Elegance', 'Little Champs', 'Tiny Tots', 'Vituko', 'Kitenge Wear', 'Safari Gear'];
+const allMaterials = ['Cotton', 'Leather', 'Denim', 'Silk', 'Polyester', 'Wool', 'Linen', 'Viscose', 'Canvas'];
 
 
-export function FilterSidebar({ currentCategorySlug }: FilterSidebarProps) {
+export function FilterSidebar({ currentCategorySlug, onApplyFilters, onClearFilters }: FilterSidebarProps) {
+  const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 20000]);
+  const [selectedColors, setSelectedColors] = useState<string[]>([]);
+  const [selectedSizes, setSelectedSizes] = useState<string[]>([]);
+  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
+  const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
 
   const currentCategory = mockCategories.find(cat => cat.slug === currentCategorySlug);
   const subcategories = currentCategory ? currentCategory.subcategories : [];
 
-  const handlePriceChange = (value: [number, number]) => {
-    setPriceRange(value);
+  const handleCheckboxChange = (setter: React.Dispatch<React.SetStateAction<string[]>>, item: string) => {
+    setter(prev => prev.includes(item) ? prev.filter(i => i !== item) : [...prev, item]);
+  };
+
+  const handleApply = () => {
+    onApplyFilters({
+      subcategories: selectedSubcategories,
+      priceRange,
+      colors: selectedColors,
+      sizes: selectedSizes,
+      brands: selectedBrands,
+      materials: selectedMaterials,
+    });
+  };
+
+  const handleClear = () => {
+    setSelectedSubcategories([]);
+    setPriceRange([0, 20000]);
+    setSelectedColors([]);
+    setSelectedSizes([]);
+    setSelectedBrands([]);
+    setSelectedMaterials([]);
+    onClearFilters();
   };
 
   return (
-    <aside className="w-full lg:w-72 xl:w-80 space-y-6 p-4 border rounded-lg shadow-sm bg-card">
+    <aside className="w-full space-y-6 p-4 border rounded-lg shadow-sm bg-card lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto">
       <h3 className="text-xl font-semibold text-primary">Filters</h3>
 
       {subcategories.length > 0 && (
-        <Accordion type="single" collapsible defaultValue="subcategories">
+        <Accordion type="single" collapsible defaultValue="subcategories" className="w-full">
           <AccordionItem value="subcategories">
-            <AccordionTrigger className="text-lg font-medium">Subcategories</AccordionTrigger>
-            <AccordionContent className="space-y-2 pt-2">
+            <AccordionTrigger className="text-lg font-medium hover:no-underline">Subcategories</AccordionTrigger>
+            <AccordionContent className="space-y-2 pt-2 max-h-48 overflow-y-auto">
               {subcategories.map((subcat) => (
                 <div key={subcat.id} className="flex items-center space-x-2">
-                  <Checkbox id={`subcat-${subcat.id}`} />
-                  <Label htmlFor={`subcat-${subcat.id}`} className="font-normal text-sm">{subcat.name}</Label>
+                  <Checkbox 
+                    id={`subcat-${subcat.slug}`} 
+                    checked={selectedSubcategories.includes(subcat.slug)}
+                    onCheckedChange={() => handleCheckboxChange(setSelectedSubcategories, subcat.slug)}
+                  />
+                  <Label htmlFor={`subcat-${subcat.slug}`} className="font-normal text-sm cursor-pointer">{subcat.name}</Label>
                 </div>
               ))}
             </AccordionContent>
@@ -52,14 +92,14 @@ export function FilterSidebar({ currentCategorySlug }: FilterSidebarProps) {
 
       <Accordion type="multiple" className="w-full" defaultValue={['price', 'color']}>
         <AccordionItem value="price">
-          <AccordionTrigger className="text-lg font-medium">Price Range (KSh)</AccordionTrigger>
+          <AccordionTrigger className="text-lg font-medium hover:no-underline">Price Range (KSh)</AccordionTrigger>
           <AccordionContent className="pt-2">
             <Slider
-              defaultValue={[priceRange[0], priceRange[1]]}
+              value={priceRange}
               min={0}
               max={20000}
               step={100}
-              onValueChange={handlePriceChange}
+              onValueChange={(value) => setPriceRange(value as [number, number])}
               className="my-4"
             />
             <div className="flex justify-between text-sm text-muted-foreground">
@@ -70,56 +110,74 @@ export function FilterSidebar({ currentCategorySlug }: FilterSidebarProps) {
         </AccordionItem>
 
         <AccordionItem value="color">
-          <AccordionTrigger className="text-lg font-medium">Color</AccordionTrigger>
+          <AccordionTrigger className="text-lg font-medium hover:no-underline">Color</AccordionTrigger>
           <AccordionContent className="grid grid-cols-3 gap-2 pt-2 max-h-48 overflow-y-auto">
-            {colors.map((color) => (
+            {allColors.map((color) => (
               <div key={color} className="flex items-center space-x-2">
-                <Checkbox id={`color-${color.toLowerCase()}`} />
-                <Label htmlFor={`color-${color.toLowerCase()}`} className="font-normal text-sm">{color}</Label>
+                <Checkbox 
+                  id={`color-${color.toLowerCase()}`} 
+                  checked={selectedColors.includes(color)}
+                  onCheckedChange={() => handleCheckboxChange(setSelectedColors, color)}
+                />
+                <Label htmlFor={`color-${color.toLowerCase()}`} className="font-normal text-sm cursor-pointer">{color}</Label>
               </div>
             ))}
           </AccordionContent>
         </AccordionItem>
 
         <AccordionItem value="size">
-          <AccordionTrigger className="text-lg font-medium">Size</AccordionTrigger>
-          <AccordionContent className="grid grid-cols-3 gap-2 pt-2">
-            {sizes.map((size) => (
+          <AccordionTrigger className="text-lg font-medium hover:no-underline">Size</AccordionTrigger>
+          <AccordionContent className="grid grid-cols-3 gap-2 pt-2 max-h-48 overflow-y-auto">
+            {allSizes.map((size) => (
               <div key={size} className="flex items-center space-x-2">
-                <Checkbox id={`size-${size.toLowerCase()}`} />
-                <Label htmlFor={`size-${size.toLowerCase()}`} className="font-normal text-sm">{size}</Label>
+                <Checkbox 
+                  id={`size-${size.toLowerCase()}`} 
+                  checked={selectedSizes.includes(size)}
+                  onCheckedChange={() => handleCheckboxChange(setSelectedSizes, size)}
+                />
+                <Label htmlFor={`size-${size.toLowerCase()}`} className="font-normal text-sm cursor-pointer">{size}</Label>
               </div>
             ))}
           </AccordionContent>
         </AccordionItem>
         
         <AccordionItem value="brand">
-          <AccordionTrigger className="text-lg font-medium">Brand</AccordionTrigger>
+          <AccordionTrigger className="text-lg font-medium hover:no-underline">Brand</AccordionTrigger>
           <AccordionContent className="space-y-2 pt-2 max-h-48 overflow-y-auto">
-            {brands.map((brand) => (
+            {allBrands.map((brand) => (
               <div key={brand} className="flex items-center space-x-2">
-                <Checkbox id={`brand-${brand.toLowerCase().replace(/\s+/g, '-')}`} />
-                <Label htmlFor={`brand-${brand.toLowerCase().replace(/\s+/g, '-')}`} className="font-normal text-sm">{brand}</Label>
+                <Checkbox 
+                  id={`brand-${brand.toLowerCase().replace(/\s+/g, '-')}`} 
+                  checked={selectedBrands.includes(brand)}
+                  onCheckedChange={() => handleCheckboxChange(setSelectedBrands, brand)}
+                />
+                <Label htmlFor={`brand-${brand.toLowerCase().replace(/\s+/g, '-')}`} className="font-normal text-sm cursor-pointer">{brand}</Label>
               </div>
             ))}
           </AccordionContent>
         </AccordionItem>
 
         <AccordionItem value="material">
-          <AccordionTrigger className="text-lg font-medium">Material</AccordionTrigger>
+          <AccordionTrigger className="text-lg font-medium hover:no-underline">Material</AccordionTrigger>
           <AccordionContent className="space-y-2 pt-2 max-h-48 overflow-y-auto">
-            {materials.map((material) => (
+            {allMaterials.map((material) => (
               <div key={material} className="flex items-center space-x-2">
-                <Checkbox id={`material-${material.toLowerCase()}`} />
-                <Label htmlFor={`material-${material.toLowerCase()}`} className="font-normal text-sm">{material}</Label>
+                <Checkbox 
+                  id={`material-${material.toLowerCase()}`} 
+                  checked={selectedMaterials.includes(material)}
+                  onCheckedChange={() => handleCheckboxChange(setSelectedMaterials, material)}
+                />
+                <Label htmlFor={`material-${material.toLowerCase()}`} className="font-normal text-sm cursor-pointer">{material}</Label>
               </div>
             ))}
           </AccordionContent>
         </AccordionItem>
       </Accordion>
 
-      <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Apply Filters</Button>
-      <Button variant="outline" className="w-full">Clear Filters</Button>
+      <div className="pt-4 space-y-2">
+        <Button onClick={handleApply} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">Apply Filters</Button>
+        <Button onClick={handleClear} variant="outline" className="w-full">Clear Filters</Button>
+      </div>
     </aside>
   );
 }

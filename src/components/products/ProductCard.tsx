@@ -18,7 +18,7 @@ export function ProductCard({ product }: ProductCardProps) {
   const { toast } = useToast();
 
   const handleAddToCart = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent link navigation if icons are clicked
+    e.preventDefault(); 
     e.stopPropagation();
     console.log('Add to cart:', product.id, product.name);
     toast({
@@ -26,11 +26,10 @@ export function ProductCard({ product }: ProductCardProps) {
       description: `${product.name} has been added to your cart.`,
       variant: "default",
     });
-    // Actual cart logic will be added later
   };
 
   const handleAddToWishlist = (e: React.MouseEvent) => {
-    e.preventDefault(); // Prevent link navigation
+    e.preventDefault(); 
     e.stopPropagation();
     console.log('Add to wishlist:', product.id, product.name);
     toast({
@@ -38,7 +37,19 @@ export function ProductCard({ product }: ProductCardProps) {
       description: `${product.name} has been added to your wishlist.`,
       variant: "default",
     });
-    // Actual wishlist logic will be added later
+  };
+
+  const handleQuickView = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    console.log('Quick View for:', product.id, product.name);
+    toast({
+        title: "Quick View",
+        description: `Displaying quick view for ${product.name}. (Modal to be implemented)`,
+        variant: "default",
+    });
+    // In a future step, this would open a modal, e.g., by calling a prop function:
+    // onOpenQuickView(product);
   };
 
   return (
@@ -55,11 +66,11 @@ export function ProductCard({ product }: ProductCardProps) {
               data-ai-hint={product.dataAiHint || 'fashion clothing'}
             />
             {/* Hover icons overlay */}
-            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2">
+            <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2 z-10">
               <Button
                 variant="ghost"
                 size="icon"
-                className="bg-background/70 hover:bg-background text-primary rounded-full h-10 w-10"
+                className="bg-background/80 hover:bg-background text-primary rounded-full h-10 w-10"
                 onClick={handleAddToCart}
                 aria-label="Add to cart"
               >
@@ -68,7 +79,7 @@ export function ProductCard({ product }: ProductCardProps) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="bg-background/70 hover:bg-background text-destructive rounded-full h-10 w-10"
+                className="bg-background/80 hover:bg-background text-destructive rounded-full h-10 w-10"
                 onClick={handleAddToWishlist}
                 aria-label="Add to wishlist"
               >
@@ -77,10 +88,10 @@ export function ProductCard({ product }: ProductCardProps) {
             </div>
           </div>
           {product.tags?.includes('new-arrival') && (
-            <Badge variant="default" className="absolute top-2 left-2 bg-accent text-accent-foreground z-10">New</Badge>
+            <Badge variant="default" className="absolute top-2 left-2 bg-accent text-accent-foreground z-20">New</Badge>
           )}
           {product.tags?.includes('sale') && (
-            <Badge variant="destructive" className="absolute top-2 right-2 z-10">Sale</Badge>
+            <Badge variant="destructive" className="absolute top-2 right-2 z-20">Sale</Badge>
           )}
         </CardHeader>
       </Link>
@@ -104,18 +115,9 @@ export function ProductCard({ product }: ProductCardProps) {
         )}
       </CardContent>
       <CardFooter className="p-4 pt-0 mt-auto">
-        {/* The "Quick View" button can remain or be removed if the hover icons are preferred for primary actions */}
-        <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground" asChild>
-            <Link href={`/products/${product.slug}`}>
-              <Eye size={18} className="mr-2" /> Quick View
-            </Link>
+        <Button variant="outline" className="w-full border-primary text-primary hover:bg-primary hover:text-primary-foreground" onClick={handleQuickView}>
+            <Eye size={18} className="mr-2" /> Quick View
         </Button>
-        {/* The "Add to Cart" button here can be removed if the hover icon is sufficient, or styled differently */}
-        {/* For example, keep it as a secondary way to add to cart:
-        <Button className="flex-1 bg-accent hover:bg-accent/90 text-accent-foreground mt-2 sm:mt-0 sm:ml-2" onClick={handleAddToCart}>
-            <ShoppingCart size={18} className="mr-2" /> Add to Cart
-        </Button>
-        */}
       </CardFooter>
     </Card>
   );
