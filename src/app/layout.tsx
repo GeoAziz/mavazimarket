@@ -22,8 +22,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable}> {/* Apply font variable to html tag */}
-      <body className={'font-sans antialiased flex flex-col min-h-screen'}> {/* Use Tailwind's font-sans utility */}
+    <html lang="en" className={inter.variable}>
+      <body className={'font-sans antialiased flex flex-col min-h-screen'}>
         <Header />
         <main className="flex-grow container mx-auto px-4 py-8">
           {children}
