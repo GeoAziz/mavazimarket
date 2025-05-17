@@ -21,34 +21,35 @@ interface EditProductPageProps {
   params: { slug: string }; 
 }
 
-// Same schema as add product page
+// Same schema as add product page, but with defaults for all fields
 const productFormSchema = z.object({
-  name: z.string().min(3, "Product name must be at least 3 characters."),
-  description: z.string().min(10, "Description must be at least 10 characters."),
-  price: z.coerce.number().positive("Price must be a positive number."),
-  category: z.string().min(1, "Category is required."),
-  subcategory: z.string().optional(),
-  stockQuantity: z.coerce.number().int().min(0, "Stock can't be negative."),
-  sku: z.string().optional(),
-  brand: z.string().optional(),
-  material: z.string().optional(),
-  images: z.string().optional().describe("Comma-separated image URLs"),
-  sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)"),
-  colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)"),
-  tags: z.string().optional().describe("Comma-separated tags (e.g., new-arrival,best-seller)"),
+  name: z.string().min(3, "Product name must be at least 3 characters.").default(""),
+  description: z.string().min(10, "Description must be at least 10 characters.").default(""),
+  price: z.coerce.number().positive("Price must be a positive number.").default(0),
+  category: z.string().min(1, "Category is required.").default(""),
+  subcategory: z.string().optional().default(""),
+  stockQuantity: z.coerce.number().int().min(0, "Stock can't be negative.").default(0),
+  sku: z.string().optional().default(""),
+  brand: z.string().optional().default(""),
+  material: z.string().optional().default(""),
+  images: z.string().optional().describe("Comma-separated image URLs").default(""),
+  sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)").default(""),
+  colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)").default(""),
+  tags: z.string().optional().describe("Comma-separated tags (e.g., new-arrival,best-seller)").default(""),
   isPublished: z.boolean().default(true),
 });
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
-export default function AdminEditProductPage({ params: paramsProp }: EditProductPageProps) {
-  const params = use(paramsProp);
-  const { slug } = params;
+export default function AdminEditProductPage({ params: paramsFromProps }: EditProductPageProps) {
+  // Directly access .slug after unwrapping with use()
+  const slug = use(paramsFromProps).slug;
+  
   const productToEdit = mockProducts.find(p => p.slug === slug);
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
-    // Default values will be set by useEffect
+    // Default values are now set in the Zod schema itself, or by useEffect for existing products
   });
 
   useEffect(() => {
@@ -69,6 +70,10 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
         tags: productToEdit.tags?.join(',') || '',
         isPublished: productToEdit.stockQuantity > 0, // Example logic
       });
+    } else if (slug) {
+      // If productToEdit is not found but slug exists, reset with defaults (mostly empty strings from schema)
+      // This handles the case where a product is not found, preventing stale form data
+      form.reset(productFormSchema.parse({})); // Reset with schema defaults
     }
   }, [productToEdit, form, slug]); 
 
@@ -78,7 +83,11 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
     alert("Product updated successfully! (Mock)");
   }
 
-  if (!productToEdit && slug) { 
+  if (!slug && typeof slug !== 'string') { // Check if slug is still resolving (though `use` should handle suspension)
+    return <div>Loading product identifier...</div>;
+  }
+  
+  if (!productToEdit) { 
     return (
       <div className="space-y-6">
         <h1 className="text-3xl font-bold text-destructive">Product Not Found</h1>
@@ -87,11 +96,6 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
       </div>
     );
   }
-  
-  if (!productToEdit && !slug) {
-    return <div>Loading product details...</div>;
-  }
-
 
   return (
     <div className="space-y-6">
@@ -164,7 +168,7 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
                    <FormField control={form.control} name="sku" render={({ field }) => (
                     <FormItem>
                       <FormLabel>SKU (Read-only for mock)</FormLabel>
-                      <FormControl><Input {...field} readOnly /></FormControl>
+                      <FormControl><Input {...field} readOnly /></FormControl> {/* Assuming SKU (product.id) is read-only */}
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -254,7 +258,7 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
               <Trash2 size={18} className="mr-2" /> Delete Product
             </Button>
             <div className="space-x-2">
-                <Button type="button" variant="outline" onClick={() => productToEdit && form.reset({
+                <Button type="button" variant="outline" onClick={() => productToEdit && form.reset({ // Ensure productToEdit exists before resetting
                     name: productToEdit.name || '',
                     description: productToEdit.description || '',
                     price: productToEdit.price,
@@ -282,3 +286,4 @@ export default function AdminEditProductPage({ params: paramsProp }: EditProduct
     </div>
   );
 }
+
