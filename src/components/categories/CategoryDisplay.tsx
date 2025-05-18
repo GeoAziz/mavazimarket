@@ -11,7 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle, SheetClose } from "@/components/ui/sheet";
 import { Filter, X, Loader2 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
-import { QuickViewModal } from '@/components/products/QuickViewModal'; // Import QuickViewModal
+import { QuickViewModal } from '@/components/products/QuickViewModal';
 
 interface CategoryDisplayProps {
   category: Category;
@@ -21,11 +21,13 @@ interface CategoryDisplayProps {
 type SortOption = 'featured' | 'newest' | 'price-asc' | 'price-desc' | 'rating';
 
 export function CategoryDisplay({ category, productsInCategory }: CategoryDisplayProps) {
-  const [currentProducts, setCurrentProducts] = useState<Product[]>(productsInCategory);
+  const [allProductsInOriginalCategory] = useState<Product[]>(productsInCategory); // Store original list
+  const [filteredAndSortedProducts, setFilteredAndSortedProducts] = useState<Product[]>(productsInCategory);
   const [displayedProducts, setDisplayedProducts] = useState<Product[]>([]);
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [hasMore, setHasMore] = useState<boolean>(true);
   const [sortOption, setSortOption] = useState<SortOption>('featured');
+  const [activeFilters, setActiveFilters] = useState<SelectedFilters | null>(null);
   const itemsPerPage = 9;
 
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
@@ -38,47 +40,11 @@ export function CategoryDisplay({ category, productsInCategory }: CategoryDispla
     setQuickViewProduct(null);
   };
 
-  // Initial products to display based on currentProducts and pagination
-  useEffect(() => {
-    const initialBatch = currentProducts.slice(0, itemsPerPage);
-    setDisplayedProducts(initialBatch);
-    setHasMore(initialBatch.length < currentProducts.length);
-  }, [currentProducts, itemsPerPage]);
-
-  const loadMoreProducts = useCallback(() => {
-    if (loadingMore || !hasMore) return;
-    
-    setLoadingMore(true);
-    const currentLength = displayedProducts.length;
-    const newProducts = currentProducts.slice(currentLength, currentLength + itemsPerPage);
-    
-    setTimeout(() => {
-      setDisplayedProducts((prev) => [...prev, ...newProducts]);
-      setHasMore((prevLength) => prevLength + newProducts.length < currentProducts.length); // Incorrect logic previously
-      setLoadingMore(false);
-    }, 500); 
-  }, [loadingMore, hasMore, displayedProducts.length, currentProducts, itemsPerPage]);
-
-  // Infinite scroll
-  useEffect(() => {
-    const onScroll = () => {
-      if (
-        window.innerHeight + document.documentElement.scrollTop >=
-        document.documentElement.offsetHeight - 300 && // Trigger a bit earlier
-        !loadingMore && hasMore
-      ) {
-        loadMoreProducts();
-      }
-    };
-    window.addEventListener('scroll', onScroll);
-    return () => window.removeEventListener('scroll', onScroll);
-  }, [loadMoreProducts, loadingMore, hasMore]);
-
-  // Sorting logic (applied to the full productsInCategory list, then sliced for display)
   const sortProducts = useCallback((products: Product[], option: SortOption): Product[] => {
     let sorted = [...products];
     switch (option) {
       case 'newest':
+        // Assuming products have a 'dateAdded' or similar, or using tags
         sorted.sort((a, b) => (a.tags?.includes('new-arrival') === b.tags?.includes('new-arrival') ? 0 : a.tags?.includes('new-arrival') ? -1 : 1));
         break;
       case 'price-asc':
@@ -92,44 +58,99 @@ export function CategoryDisplay({ category, productsInCategory }: CategoryDispla
         break;
       case 'featured':
       default:
+        // Mock "featured" - could be by best-seller tag or a predefined order
         sorted.sort((a, b) => (a.tags?.includes('best-seller') === b.tags?.includes('best-seller') ? 0 : a.tags?.includes('best-seller') ? -1 : 1));
         break;
     }
     return sorted;
   }, []);
-  
-  useEffect(() => {
-    setCurrentProducts(sortProducts(productsInCategory, sortOption));
-  }, [sortOption, productsInCategory, sortProducts]);
 
+  const applyFiltersAndSort = useCallback((filters: SelectedFilters | null, currentSort: SortOption) => {
+    let productsToProcess = [...allProductsInOriginalCategory];
 
-  const handleApplyFilters = (filters: SelectedFilters) => {
-    console.log("Applying filters (mock):", filters);
-    // In a real app, filter `productsInCategory` based on `filters`
-    // then sort the result using `sortProducts(filtered, sortOption)`
-    // For demo, let's shuffle or take a slice to show change
-    // This mock logic will be improved when we wire up actual filtering
-    const mockFiltered = [...productsInCategory]
-      .filter(p => {
-        let pass = true;
+    if (filters) {
+      productsToProcess = productsToProcess.filter(p => {
+        let passPrice = true;
+        let passColors = true;
+        let passSizes = true;
+        let passBrands = true;
+        let passMaterials = true;
+        let passSubcategories = true;
+
         if (filters.priceRange) {
-          pass = pass && p.price >= filters.priceRange[0] && p.price <= filters.priceRange[1];
+          passPrice = p.price >= filters.priceRange[0] && p.price <= filters.priceRange[1];
         }
         if (filters.colors.length > 0) {
-          pass = pass && p.colors?.some(c => filters.colors.includes(c));
+          passColors = p.colors?.some(c => filters.colors.includes(c)) ?? false;
         }
-        // Add more filter conditions here
-        return pass;
-      })
-      .sort(() => 0.5 - Math.random()) // Mock: shuffle to show change
-      .slice(0, Math.max(5, productsInCategory.length - Math.floor(Math.random() * 5))); // Mock: reduce count
+        if (filters.sizes.length > 0) {
+          passSizes = p.sizes?.some(s => filters.sizes.includes(s)) ?? false;
+        }
+        if (filters.brands.length > 0) {
+          passBrands = p.brand ? filters.brands.includes(p.brand) : false;
+        }
+        if (filters.materials.length > 0) {
+          passMaterials = p.material ? filters.materials.includes(p.material) : false;
+        }
+        if (filters.subcategories.length > 0 && p.subcategory) {
+            const categoryDetails = category.subcategories.find(sc => sc.name === p.subcategory);
+            if (categoryDetails) {
+                 passSubcategories = filters.subcategories.includes(categoryDetails.slug);
+            } else {
+                passSubcategories = false;
+            }
+        }
 
-    setCurrentProducts(sortProducts(mockFiltered, sortOption)); // Apply current sort to mock filtered
+        return passPrice && passColors && passSizes && passBrands && passMaterials && passSubcategories;
+      });
+    }
+    
+    const sorted = sortProducts(productsToProcess, currentSort);
+    setFilteredAndSortedProducts(sorted);
+    setDisplayedProducts(sorted.slice(0, itemsPerPage));
+    setHasMore(sorted.length > itemsPerPage);
+  }, [allProductsInOriginalCategory, sortProducts, itemsPerPage, category.subcategories]);
+
+
+  useEffect(() => {
+    applyFiltersAndSort(activeFilters, sortOption);
+  }, [sortOption, activeFilters, applyFiltersAndSort]);
+  
+
+  const loadMoreProducts = useCallback(() => {
+    if (loadingMore || !hasMore) return;
+    
+    setLoadingMore(true);
+    const currentLength = displayedProducts.length;
+    const newProducts = filteredAndSortedProducts.slice(currentLength, currentLength + itemsPerPage);
+    
+    setTimeout(() => { // Simulate network delay
+      setDisplayedProducts((prev) => [...prev, ...newProducts]);
+      setHasMore(displayedProducts.length + newProducts.length < filteredAndSortedProducts.length);
+      setLoadingMore(false);
+    }, 500); 
+  }, [loadingMore, hasMore, displayedProducts, filteredAndSortedProducts, itemsPerPage]);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (
+        window.innerHeight + document.documentElement.scrollTop >=
+        document.documentElement.offsetHeight - 300 &&
+        !loadingMore && hasMore
+      ) {
+        loadMoreProducts();
+      }
+    };
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [loadMoreProducts, loadingMore, hasMore]);
+
+  const handleApplyFilters = (filters: SelectedFilters) => {
+    setActiveFilters(filters);
   };
 
   const handleClearFilters = () => {
-    console.log("Clearing filters");
-    setCurrentProducts(sortProducts(productsInCategory, sortOption)); // Reset to original, sorted by current option
+    setActiveFilters(null);
   };
 
   return (
@@ -162,7 +183,7 @@ export function CategoryDisplay({ category, productsInCategory }: CategoryDispla
           <div className="lg:w-3/4 xl:w-4/5">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
               <p className="text-muted-foreground text-sm">
-                Showing {displayedProducts.length} of {currentProducts.length} products
+                Showing {displayedProducts.length} of {filteredAndSortedProducts.length} products
               </p>
 
               <div className="lg:hidden">
@@ -187,9 +208,15 @@ export function CategoryDisplay({ category, productsInCategory }: CategoryDispla
                         currentCategorySlug={category.slug}
                         onApplyFilters={(filters) => {
                           handleApplyFilters(filters);
-                          // Potentially close sheet here: document.querySelector('[data-radix-dialog-close]')?.click();
+                          // Consider closing the sheet automatically after applying
+                          const closeButton = document.querySelector('[data-radix-dialog-close]') as HTMLElement | null;
+                          closeButton?.click();
                         }}
-                        onClearFilters={handleClearFilters}
+                        onClearFilters={() => {
+                            handleClearFilters();
+                            const closeButton = document.querySelector('[data-radix-dialog-close]') as HTMLElement | null;
+                            closeButton?.click();
+                        }}
                       />
                     </div>
                   </SheetContent>
@@ -216,9 +243,11 @@ export function CategoryDisplay({ category, productsInCategory }: CategoryDispla
                   <ProductCard key={product.id} product={product} onOpenQuickView={handleOpenQuickView}/>
                 ))}
               </div>
-            ) : !loadingMore && currentProducts.length === 0 ? ( 
-              <div className="text-center py-10">
+            ) : !loadingMore && filteredAndSortedProducts.length === 0 ? ( 
+              <div className="text-center py-16">
+                <Filter size={48} className="mx-auto text-muted-foreground mb-4" />
                 <p className="text-xl text-muted-foreground">No products found matching your criteria.</p>
+                <p className="text-sm text-muted-foreground mt-2">Try adjusting your filters or check back later!</p>
               </div>
             ) : null }
 
@@ -230,14 +259,14 @@ export function CategoryDisplay({ category, productsInCategory }: CategoryDispla
                 </Button>
               </div>
             )}
-            {!hasMore && displayedProducts.length > 0 && currentProducts.length > itemsPerPage && (
+            {!hasMore && displayedProducts.length > 0 && filteredAndSortedProducts.length > itemsPerPage && (
                <div className="text-center py-6 text-muted-foreground">
                   You've reached the end of the products.
                </div>
             )}
-             {!hasMore && displayedProducts.length > 0 && displayedProducts.length === currentProducts.length && currentProducts.length > 0 && (
+             {!hasMore && displayedProducts.length > 0 && displayedProducts.length === filteredAndSortedProducts.length && filteredAndSortedProducts.length > 0 && (
                <div className="text-center py-6 text-muted-foreground">
-                  All {currentProducts.length} product(s) shown.
+                  All {filteredAndSortedProducts.length} product(s) shown.
                </div>
              )}
           </div>

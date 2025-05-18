@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +10,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Mail, Phone, MapPin, Send } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, Loader2 } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 const contactFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
@@ -20,15 +23,27 @@ const contactFormSchema = z.object({
 type ContactFormValues = z.infer<typeof contactFormSchema>;
 
 export default function ContactUsPage() {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<ContactFormValues>({
     resolver: zodResolver(contactFormSchema),
     defaultValues: { name: "", email: "", subject: "", message: "" },
   });
 
-  function onSubmit(data: ContactFormValues) {
+  async function onSubmit(data: ContactFormValues) {
+    setIsSubmitting(true);
     console.log("Contact form submission:", data);
-    alert("Message sent! We'll get back to you soon. (Mock)");
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500)); 
+    
+    toast({
+      title: "Message Sent!",
+      description: "Thanks for reaching out. We'll get back to you soon.",
+      variant: "default",
+    });
     form.reset();
+    setIsSubmitting(false);
   }
 
   return (
@@ -93,7 +108,7 @@ export default function ContactUsPage() {
                 <FormField control={form.control} name="name" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Full Name</FormLabel>
-                      <FormControl><Input placeholder="Your Name" {...field} /></FormControl>
+                      <FormControl><Input placeholder="Your Name" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -101,7 +116,7 @@ export default function ContactUsPage() {
                 <FormField control={form.control} name="email" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
-                      <FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl>
+                      <FormControl><Input type="email" placeholder="you@example.com" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -109,7 +124,7 @@ export default function ContactUsPage() {
                 <FormField control={form.control} name="subject" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Subject</FormLabel>
-                      <FormControl><Input placeholder="e.g. Question about an order" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g. Question about an order" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -117,13 +132,22 @@ export default function ContactUsPage() {
                 <FormField control={form.control} name="message" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Message</FormLabel>
-                      <FormControl><Textarea placeholder="Your message..." rows={5} {...field} className="resize-none" /></FormControl>
+                      <FormControl><Textarea placeholder="Your message..." rows={5} {...field} className="resize-none" disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Sending..." : <><Send size={16} className="mr-2"/> Send Message</>}
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Sending...
+                    </>
+                  ) : (
+                    <>
+                      <Send size={16} className="mr-2"/> Send Message
+                    </>
+                  )}
                 </Button>
               </form>
             </Form>

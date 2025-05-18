@@ -40,7 +40,7 @@ export default function HomePage() {
             src="https://placehold.co/1600x900.png"
             alt="Hero Banner - Latest Collections"
             fill // Use fill for responsive background images
-            objectFit="cover" // Ensures the image covers the area
+            style={{objectFit:"cover"}} // Ensures the image covers the area
             priority
             data-ai-hint="fashion models runway"
           />
@@ -52,15 +52,10 @@ export default function HomePage() {
               Explore the freshest collections for men, women, and kids. Quality fashion, uniquely Kenyan.
             </p>
             <div className="space-x-2 md:space-x-4">
-              <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-8 py-3 text-lg transition-all ease-in-out duration-300" asChild>
+              <Button size="lg" className="bg-primary hover:bg-primary/90 text-primary-foreground rounded-full px-10 py-6 text-lg transition-all ease-in-out duration-300 hover:scale-105" asChild>
                 <Link href="/#featured-products">Shop Now</Link>
               </Button>
-              <Button size="lg" variant="outline" className="bg-white/20 hover:bg-white/30 text-white border-white rounded-full px-8 py-3 text-lg backdrop-blur-sm" asChild>
-                <Link href="/#new-arrivals">New Arrivals</Link>
-              </Button>
-              <Button size="lg" variant="outline" className="bg-accent/80 hover:bg-accent text-accent-foreground border-accent rounded-full px-8 py-3 text-lg backdrop-blur-sm" asChild>
-                <Link href="/sale">Sale</Link>
-              </Button>
+              {/* Removed New Arrivals and Sale buttons from here as they are redundant or have dedicated sections/pages */}
             </div>
           </div>
         </section>
@@ -78,7 +73,7 @@ export default function HomePage() {
                         src={category.image}
                         alt={category.name}
                         fill
-                        objectFit="cover"
+                        style={{objectFit:"cover"}}
                         className="group-hover:scale-105 transition-transform duration-300"
                         data-ai-hint={category.dataAiHint || 'fashion category'}
                       />
