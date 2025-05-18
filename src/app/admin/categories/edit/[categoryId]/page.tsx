@@ -8,14 +8,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Save, Trash2, Layers, Loader2, ArrowLeft } from 'lucide-react';
+import { Save, Trash2, Layers, Loader2, ArrowLeft, PlusCircle } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { useEffect, useState } from "react";
-import { doc, getDoc, updateDoc, Timestamp, collection, query, where } from "firebase/firestore";
+import { useEffect, useState, use } from "react"; // Added use
+import { doc, getDoc, updateDoc, Timestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import type { Category as CategoryType } from "@/lib/types"; // Renamed to avoid conflict
+import type { Category as CategoryType } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface EditCategoryPageProps {
@@ -30,7 +30,7 @@ const generateSlug = (name: string) => {
 };
 
 const subcategorySchema = z.object({
-  id: z.string().optional(), // Keep existing ID
+  id: z.string().optional().default(""), // Keep existing ID or allow new one
   name: z.string().min(2, "Subcategory name is too short.").default(""),
   slug: z.string().min(2, "Subcategory slug is too short, or auto-generate.").optional().default(""),
   priceRange: z.string().optional().default("KSh 0 - KSh 0"),
@@ -47,7 +47,7 @@ const categoryFormSchema = z.object({
 type CategoryFormValues = z.infer<typeof categoryFormSchema>;
 
 export default function AdminEditCategoryPage({ params }: EditCategoryPageProps) {
-  const { categoryId } = params;
+  const { categoryId } = use(params); // Unwtrapping params
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -56,10 +56,10 @@ export default function AdminEditCategoryPage({ params }: EditCategoryPageProps)
 
   const form = useForm<CategoryFormValues>({
     resolver: zodResolver(categoryFormSchema),
-    defaultValues: categoryFormSchema.parse({}),
+    defaultValues: categoryFormSchema.parse({}), // Initialize with Zod defaults
   });
 
-  const { fields, append, remove, replace } = useFieldArray({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: "subcategories",
   });
@@ -68,7 +68,12 @@ export default function AdminEditCategoryPage({ params }: EditCategoryPageProps)
 
   useEffect(() => {
     const fetchCategory = async () => {
-      if (!categoryId) return;
+      if (!categoryId) {
+        setIsLoadingCategory(false); // Stop loading if no categoryId
+        toast({ title: "Error", description: "Category ID is missing.", variant: "destructive" });
+        router.push('/admin/categories');
+        return;
+      }
       setIsLoadingCategory(true);
       try {
         const categoryDocRef = doc(db, "categories", categoryId);
@@ -82,10 +87,10 @@ export default function AdminEditCategoryPage({ params }: EditCategoryPageProps)
             image: data.image || "https://placehold.co/400x300.png",
             dataAiHint: data.dataAiHint || "",
             subcategories: data.subcategories?.map(sub => ({
-                id: sub.id, // Keep existing ID
+                id: sub.id || sub.slug || "", // Ensure ID exists
                 name: sub.name || "",
                 slug: sub.slug || "",
-                priceRange: sub.priceRange || "",
+                priceRange: sub.priceRange || "KSh 0 - KSh 0",
             })) || [],
           });
         } else {
@@ -113,7 +118,7 @@ export default function AdminEditCategoryPage({ params }: EditCategoryPageProps)
         slug: finalSlug,
         subcategories: data.subcategories?.map(sub => ({
             ...sub,
-            id: sub.id || sub.slug || generateSlug(sub.name), // Ensure new subs get an ID
+            id: sub.id || sub.slug || generateSlug(sub.name), // Ensure new/existing subs get an ID
             slug: sub.slug || generateSlug(sub.name)
         })) || [],
         updatedAt: Timestamp.now(),
@@ -237,7 +242,7 @@ export default function AdminEditCategoryPage({ params }: EditCategoryPageProps)
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => append({ name: "", slug: "", priceRange: ""})}
+                onClick={() => append(subcategorySchema.parse({}))} // Use schema default for new subcategory
                 disabled={isSubmitting}
               >
                 <PlusCircle size={18} className="mr-2"/> Add Subcategory
