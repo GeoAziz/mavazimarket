@@ -1,58 +1,71 @@
 
+import type { Timestamp } from "firebase/firestore";
+
 export type Product = {
-  id: string;
+  id: string; // Firestore document ID
   name: string;
   description: string;
   price: number;
-  images: string[];
-  category: string; // e.g., "men", "women", "kids"
-  subcategory: string; // e.g., "T-Shirts", "Dresses"
+  images: string[]; // Array of image URLs
+  category: string; // Refers to Category ID
+  subcategory: string; // Subcategory slug, e.g., "t-shirts"
   sizes: string[];
   colors: string[];
   material?: string;
   brand?: string;
   stockQuantity: number;
   averageRating?: number;
-  reviews?: Review[];
+  // reviews?: Review[]; // Reviews will be a subcollection
   slug: string;
-  tags?: string[]; // e.g., "new-arrival", "best-seller", "sale"
-  dataAiHint?: string; // For placeholder images
+  tags?: string[]; 
+  dataAiHint?: string; 
+  isPublished?: boolean;
+  createdAt?: Timestamp | string; // Store as Firestore Timestamp, allow string for mock
+  updatedAt?: Timestamp | string; // Store as Firestore Timestamp, allow string for mock
 };
 
 export type Category = {
-  id: string;
-  name: string; // "Men", "Women", "Kids"
+  id: string; // Firestore document ID
+  name: string; 
   slug: string;
   image: string;
   dataAiHint?: string;
   subcategories: Subcategory[];
+  createdAt?: Timestamp | string;
+  updatedAt?: Timestamp | string;
 };
 
 export type Subcategory = {
-  id:string;
+  id:string; // Often same as slug for simplicity within the array
   name: string;
   slug: string;
-  priceRange: string; // e.g., "KSH 1,000 - KSH 4,500"
+  priceRange: string; 
 };
 
 export type CartItem = {
-  id: string; // This would be the product ID
+  id: string; 
+  productId?: string; // To ensure we always have the product's original ID
   name: string;
   price: number;
   quantity: number;
   image: string;
   size?: string;
   color?: string;
+  slug?: string; // For linking back to product page from cart/order
 };
 
 export type User = {
-  id: string;
+  id: string; // Firebase Auth UID
   name: string;
   email: string;
   profilePictureUrl?: string;
   shippingAddress?: Address;
-  orderHistory?: Order[];
-  wishlist?: Product[];
+  // orderHistory will be fetched via query against Orders collection
+  wishlist?: string[]; // Array of product IDs
+  role?: 'user' | 'admin'; // For Firestore profile, custom claims handle Auth rules
+  createdAt?: Timestamp | string;
+  updatedAt?: Timestamp | string;
+  dataAiHint?: string;
 };
 
 export type Address = {
@@ -63,26 +76,52 @@ export type Address = {
 };
 
 export type Order = {
-  id: string;
-  orderDate: string; // ISO date string
+  id: string; // Firestore document ID
+  userId: string; // Firebase Auth UID of the customer
+  orderDate: Timestamp | string; 
   status: 'Pending' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: CartItem[];
   totalAmount: number;
   shippingAddress: Address;
   paymentMethod: string;
+  // paymentDetails?: any; // e.g., transaction ID
+  // trackingNumber?: string;
+  updatedAt?: Timestamp | string;
 };
 
 export type Review = {
-  id: string;
+  id: string; // Firestore document ID
+  productId: string;
   userId: string;
   userName: string;
-  rating: number; // 1-5
+  rating: number; 
   comment: string;
-  date: string; // ISO date string
+  date: Timestamp | string; 
+  updatedAt?: Timestamp | string;
 };
 
 export type NavItem = {
   label: string;
   href: string;
   sublinks?: NavItem[];
+};
+
+// For general site settings document in Firestore
+export type SiteSettings = {
+  siteName?: string;
+  siteTagline?: string;
+  siteDescription?: string;
+  publicEmail?: string;
+  publicPhone?: string;
+  storeAddress?: string;
+  themeAppearance?: { // For values from /admin/appearance/customize
+    primaryColor?: string;
+    accentColor?: string;
+    backgroundColor?: string;
+    textColor?: string;
+    showHeroBanner?: boolean;
+    showFeaturedProducts?: boolean;
+  };
+  // Potentially other settings groups like 'paymentGateways', 'shippingOptions'
+  updatedAt?: Timestamp;
 };

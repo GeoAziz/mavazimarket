@@ -14,13 +14,14 @@ import {
   SidebarGroup,
   SidebarGroupLabel
 } from '@/components/ui/sidebar';
-import { Home, Package, ShoppingBag, Users, Settings, BarChart3, LogOut, Palette, Shirt } from 'lucide-react';
+import { Home, Package, ShoppingBag, Users, Settings, BarChart3, LogOut, Palette, Shirt, Layers3 } from 'lucide-react'; // Added Layers3
 import { cn } from '@/lib/utils';
 
 const adminNavItems = [
   { href: '/admin', label: 'Dashboard', icon: Home },
   { href: '/admin/products', label: 'Products', icon: Package },
   { href: '/admin/orders', label: 'Orders', icon: ShoppingBag },
+  { href: '/admin/categories', label: 'Categories', icon: Layers3 }, // Added Categories
   { href: '/admin/customers', label: 'Customers', icon: Users },
   { href: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
   {
@@ -45,7 +46,7 @@ export function AdminSidebar() {
         </Link>
          <Link href="/admin" className="text-xl font-bold text-primary hidden group-data-[collapsible=icon]:block">
           M<span className="text-accent">A</span>
-        </Link>
+         </Link>
       </SidebarHeader>
       <SidebarContent className="flex-1 p-2">
         <SidebarMenu>

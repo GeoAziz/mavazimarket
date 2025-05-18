@@ -6,10 +6,12 @@ import { BarChart3, CalendarDays, DollarSign, Users, TrendingUp, ShoppingCart, L
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { ChartConfig, ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { useEffect, useState } from 'react';
-import { collection, getDocs, query, orderBy, getCountFromServer } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, getCountFromServer, where, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Order } from '@/lib/types';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { DateRangePicker } from '@/components/ui/date-range-picker'; // Assuming you have this or similar
+import type { DateRange } from 'react-day-picker';
 
 interface SalesDataPoint {
   month: string;
@@ -26,72 +28,117 @@ const chartConfig = {
 interface AdminStats {
     totalRevenue: number;
     totalSales: number;
-    newCustomers: number; // This will remain mock for now
-    conversionRate: string; // This will remain mock for now
+    totalCustomers: number;
+    conversionRate: string; 
 }
 
 export default function AdminAnalyticsPage() {
   const [salesData, setSalesData] = useState<SalesDataPoint[]>([]);
   const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(true);
+  const [loadingChart, setLoadingChart] = useState(true);
+  
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(() => {
+    const endDate = new Date();
+    const startDate = subMonths(endDate, 5); // Default to last 6 months (5 months back + current month)
+    return { from: startOfMonth(startDate), to: endOfMonth(endDate) };
+  });
 
   useEffect(() => {
     const fetchAnalyticsData = async () => {
-      setLoading(true);
+      if (!dateRange || !dateRange.from || !dateRange.to) {
+        setLoadingStats(false);
+        setLoadingChart(false);
+        return;
+      }
+
+      setLoadingStats(true);
+      setLoadingChart(true);
+
       try {
         const ordersRef = collection(db, "orders");
-        const ordersQuery = query(ordersRef, orderBy("orderDate", "asc"));
+        // Base query for orders within the date range
+        const ordersQuery = query(
+          ordersRef,
+          where("orderDate", ">=", Timestamp.fromDate(dateRange.from)),
+          where("orderDate", "<=", Timestamp.fromDate(dateRange.to)),
+          orderBy("orderDate", "asc")
+        );
+        
         const ordersSnapshot = await getDocs(ordersQuery);
 
         const monthlySales: { [key: string]: number } = {};
-        let totalRevenue = 0;
-        let totalSalesCount = 0;
+        let currentRangeTotalRevenue = 0;
+        let currentRangeTotalSalesCount = 0;
 
         ordersSnapshot.forEach(doc => {
           const order = doc.data() as Order;
-          const date = (order.orderDate as any).toDate ? (order.orderDate as any).toDate() : new Date(order.orderDate);
+          // Ensure orderDate is a Date object
+          const orderDateTimestamp = order.orderDate as any;
+          const date = orderDateTimestamp.toDate ? orderDateTimestamp.toDate() : new Date(orderDateTimestamp);
+          
           const monthYear = format(date, "MMM yyyy");
           
           monthlySales[monthYear] = (monthlySales[monthYear] || 0) + order.totalAmount;
-          totalRevenue += order.totalAmount;
-          totalSalesCount++;
+          currentRangeTotalRevenue += order.totalAmount;
+          currentRangeTotalSalesCount++;
         });
 
         const formattedSalesData = Object.entries(monthlySales)
             .map(([month, sales]) => ({ month, sales }))
-            .sort((a,b) => parseISO(a.month === "Jan 2024" ? "2024-01-01" : new Date(a.month).toISOString())  // Basic sort, needs improvement for proper date sorting
-                        - parseISO(b.month === "Jan 2024" ? "2024-01-01" : new Date(b.month).toISOString())); // Hack for "Jan 2024" string
+            .sort((a, b) => parseISO(new Date(a.month).toISOString()) - parseISO(new Date(b.month).toISOString()));
 
-        setSalesData(formattedSalesData.slice(-6)); // Show last 6 months or available
+        setSalesData(formattedSalesData);
+        setLoadingChart(false);
 
-        // Fetch total customers
+        // Fetch total customers (not filtered by date range)
         const usersCollection = collection(db, "users");
         const usersSnapshot = await getCountFromServer(usersCollection);
 
-
         setStats({
-            totalRevenue: totalRevenue,
-            totalSales: totalSalesCount,
-            newCustomers: usersSnapshot.data().count, // Using total users as proxy for new customers
-            conversionRate: "3.5%" // Mock
+            totalRevenue: currentRangeTotalRevenue,
+            totalSales: currentRangeTotalSalesCount,
+            totalCustomers: usersSnapshot.data().count, 
+            conversionRate: "3.5%" // Mock - Explain this limitation
         });
 
       } catch (error) {
         console.error("Error fetching analytics data:", error);
+        setSalesData([]);
+        setStats({ totalRevenue: 0, totalSales: 0, totalCustomers: 0, conversionRate: "N/A" });
       }
-      setLoading(false);
+      setLoadingStats(false);
+      setLoadingChart(false); // Ensure chart loading also stops on error
     };
 
     fetchAnalyticsData();
-  }, []);
+  }, [dateRange]);
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold text-primary flex items-center">
-        <BarChart3 size={30} className="mr-3 text-accent" /> Analytics & Reports
-      </h1>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h1 className="text-3xl font-bold text-primary flex items-center">
+          <BarChart3 size={30} className="mr-3 text-accent" /> Analytics & Reports
+        </h1>
+        <DateRangePicker
+            initialDateFrom={dateRange?.from}
+            initialDateTo={dateRange?.to}
+            onUpdate={(values) => {
+              if (values.range.from && values.range.to) {
+                setDateRange({ from: values.range.from, to: values.range.to });
+              } else if (values.range.from && !values.range.to) {
+                setDateRange({ from: values.range.from, to: values.range.from }); // Single day selection
+              } else {
+                setDateRange(undefined); // Or handle as needed
+              }
+            }}
+            align="end"
+            locale="en-GB"
+            showCompare={false}
+         />
+      </div>
 
-      {loading ? (
+      {loadingStats ? (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
             {[...Array(4)].map((_,i) => <Card key={i} className="shadow-md h-32 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-primary"/></Card>)}
         </div>
@@ -99,22 +146,20 @@ export default function AdminAnalyticsPage() {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Revenue</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Revenue (Selected Range)</CardTitle>
               <DollarSign className="h-4 w-4 text-green-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground">KSh {stats.totalRevenue.toLocaleString()}</div>
-              {/* <p className="text-xs text-muted-foreground">+15.2% from last month</p> */}
             </CardContent>
           </Card>
           <Card className="shadow-md">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Sales</CardTitle>
+              <CardTitle className="text-sm font-medium text-muted-foreground">Sales (Selected Range)</CardTitle>
               <ShoppingCart className="h-4 w-4 text-blue-500" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold text-foreground">+{stats.totalSales}</div>
-              {/* <p className="text-xs text-muted-foreground">+10.1% from last month</p> */}
             </CardContent>
           </Card>
           <Card className="shadow-md">
@@ -123,8 +168,7 @@ export default function AdminAnalyticsPage() {
               <Users className="h-4 w-4 text-purple-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">+{stats.newCustomers}</div>
-              {/* <p className="text-xs text-muted-foreground">+5% from last month</p> */}
+              <div className="text-2xl font-bold text-foreground">+{stats.totalCustomers}</div>
             </CardContent>
           </Card>
           <Card className="shadow-md">
@@ -133,8 +177,8 @@ export default function AdminAnalyticsPage() {
               <TrendingUp className="h-4 w-4 text-orange-500" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-foreground">{stats.conversionRate} (Mock)</div>
-              {/* <p className="text-xs text-muted-foreground">+0.2% from last month</p> */}
+              <div className="text-2xl font-bold text-foreground">{stats.conversionRate}</div>
+               <p className="text-xs text-muted-foreground">(Mock - Requires visitor tracking)</p>
             </CardContent>
           </Card>
         </div>
@@ -145,11 +189,15 @@ export default function AdminAnalyticsPage() {
           <CardTitle className="text-xl">Sales Overview</CardTitle>
           <div className="flex items-center space-x-2 text-sm text-muted-foreground">
             <CalendarDays size={16} />
-            <span>{salesData.length > 0 ? `${salesData[0].month} - ${salesData[salesData.length - 1].month}` : 'Recent Months'}</span>
+            <span>
+              {dateRange?.from && dateRange.to 
+                ? `${format(dateRange.from, "MMM dd, yyyy")} - ${format(dateRange.to, "MMM dd, yyyy")}` 
+                : 'Select date range'}
+            </span>
           </div>
         </CardHeader>
         <CardContent className="pl-2">
-          {loading ? (
+          {loadingChart ? (
              <div className="h-[300px] w-full flex items-center justify-center"><Loader2 className="h-12 w-12 animate-spin text-primary"/></div>
           ) : salesData.length > 0 ? (
             <ChartContainer config={chartConfig} className="h-[300px] w-full">
@@ -176,7 +224,7 @@ export default function AdminAnalyticsPage() {
         </CardHeader>
         <CardContent>
           <p className="text-muted-foreground">This section will display more detailed analytics and reports.</p>
-          <p className="mt-2">Content coming soon!</p>
+          <p className="mt-2">Popular products, customer demographics, etc. (Coming Soon)</p>
         </CardContent>
       </Card>
     </div>

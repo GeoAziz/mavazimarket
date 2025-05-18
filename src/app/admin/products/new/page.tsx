@@ -4,18 +4,29 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-// Label import removed as FormLabel is used
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { PlusCircle, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Loader2 } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { useRouter } from "next/navigation";
+import type { Category } from "@/lib/types"; // For fetching categories
+
+// Function to generate slug (simplified)
+const generateSlug = (name: string) => {
+  return name
+    .toLowerCase()
+    .replace(/\s+/g, '-') // Replace spaces with -
+    .replace(/[^\w-]+/g, ''); // Remove all non-word chars
+};
 
 const productFormSchema = z.object({
   name: z.string().min(3, "Product name must be at least 3 characters."),
@@ -27,18 +38,35 @@ const productFormSchema = z.object({
   sku: z.string().optional().default(""),
   brand: z.string().optional().default(""),
   material: z.string().optional().default(""),
-  images: z.string().optional().describe("Comma-separated image URLs").default(""),
+  images: z.string().optional().describe("Comma-separated image URLs").default(""), // Storing as string for simplicity
   sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)").default(""),
   colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)").default(""),
   tags: z.string().optional().describe("Comma-separated tags (e.g., new-arrival,best-seller)").default(""),
   isPublished: z.boolean().default(true),
+  dataAiHint: z.string().optional().default(""),
 });
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
 export default function AdminAddProductPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [categories, setCategories] = useState<Category[]>([]); // To populate category select
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const catCol = collection(db, "categories");
+        const catSnapshot = await getDocs(catCol);
+        setCategories(catSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
+      } catch (error) {
+        console.error("Error fetching categories: ", error);
+        toast({ title: "Error", description: "Could not load categories.", variant: "destructive" });
+      }
+    };
+    fetchCategories();
+  }, [toast]);
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
@@ -57,23 +85,48 @@ export default function AdminAddProductPage() {
       colors: "",
       tags: "",
       isPublished: true,
+      dataAiHint: ""
     },
   });
 
   async function onSubmit(data: ProductFormValues) {
     setIsSubmitting(true);
-    console.log("New product data:", data);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast({
-      title: "Product Created!",
-      description: `${data.name} has been successfully created.`,
-      variant: "default",
-    });
-    form.reset(); // Reset form after successful submission
+    try {
+      const slug = generateSlug(data.name);
+      const productData = {
+        ...data,
+        slug,
+        images: data.images ? data.images.split(',').map(img => img.trim()).filter(img => img) : [],
+        sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : [],
+        colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : [],
+        tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : [],
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        averageRating: 0, // Default average rating
+        // reviews will be a subcollection, so not stored directly on product
+      };
+
+      const docRef = await addDoc(collection(db, "products"), productData);
+      console.log("New product created with ID: ", docRef.id);
+      
+      toast({
+        title: "Product Created!",
+        description: `${data.name} has been successfully created.`,
+      });
+      form.reset(); // Reset form after successful submission
+      router.push('/admin/products'); // Redirect to product list
+    } catch (error) {
+      console.error("Error creating product: ", error);
+      toast({
+        title: "Error Creating Product",
+        description: "There was an issue saving the product. Please try again.",
+        variant: "destructive",
+      });
+    }
     setIsSubmitting(false);
   }
+
+  const selectedCategoryObj = categories.find(c => c.id === form.watch("category"));
 
   return (
     <div className="space-y-6">
@@ -89,7 +142,6 @@ export default function AdminAddProductPage() {
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
           <div className="grid lg:grid-cols-3 gap-8 items-start">
-            {/* Main Product Information Column */}
             <div className="lg:col-span-2 space-y-6">
               <Card className="shadow-md">
                 <CardHeader>
@@ -120,10 +172,18 @@ export default function AdminAddProductPage() {
                         <FormItem>
                         <FormLabel>Image URLs (comma-separated)</FormLabel>
                         <FormControl><Textarea placeholder="https://placehold.co/600x800.png, https://placehold.co/600x800.png" {...field} rows={2} disabled={isSubmitting}/></FormControl>
+                         <FormDescription>Enter image URLs separated by commas. First image is the primary.</FormDescription>
                         <FormMessage />
                         </FormItem>
                     )} />
-                    <p className="text-xs text-muted-foreground mt-2">For actual image uploads, a dedicated component would be used here.</p>
+                     <FormField control={form.control} name="dataAiHint" render={({ field }) => (
+                        <FormItem className="mt-4">
+                        <FormLabel>Image AI Hint (Optional)</FormLabel>
+                        <FormControl><Input placeholder="e.g. mens t-shirt" {...field} disabled={isSubmitting} /></FormControl>
+                        <FormDescription>Keywords for AI if images are placeholders (max 2 words).</FormDescription>
+                        <FormMessage />
+                        </FormItem>
+                    )} />
                  </CardContent>
               </Card>
 
@@ -155,7 +215,7 @@ export default function AdminAddProductPage() {
               </Card>
 
               <Card className="shadow-md">
-                <CardHeader><CardTitle className="flex items-center">Variants (Simplified)</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="flex items-center">Variants</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     <FormField control={form.control} name="sizes" render={({ field }) => (
                         <FormItem><FormLabel className="flex items-center"><Ruler className="mr-2 text-primary/80"/>Sizes (comma-separated)</FormLabel>
@@ -169,7 +229,6 @@ export default function AdminAddProductPage() {
               </Card>
             </div>
 
-            {/* Sidebar Column for Organization, etc. */}
             <div className="lg:col-span-1 space-y-6">
               <Card className="shadow-md">
                 <CardHeader><CardTitle className="flex items-center"><Layers className="mr-2 text-primary/80"/>Organization</CardTitle></CardHeader>
@@ -177,13 +236,12 @@ export default function AdminAddProductPage() {
                   <FormField control={form.control} name="category" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                       <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
+                       <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting || categories.length === 0}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
                         <SelectContent>
-                          <SelectItem value="men">Men</SelectItem>
-                          <SelectItem value="women">Women</SelectItem>
-                          <SelectItem value="kids">Kids</SelectItem>
-                          <SelectItem value="accessories">Accessories</SelectItem>
+                          {categories.map(cat => (
+                            <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                          ))}
                         </SelectContent>
                       </Select>
                       <FormMessage />
@@ -191,8 +249,19 @@ export default function AdminAddProductPage() {
                   )} />
                    <FormField control={form.control} name="subcategory" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Subcategory (Optional)</FormLabel>
-                      <FormControl><Input placeholder="e.g. T-Shirts" {...field} disabled={isSubmitting} /></FormControl>
+                      <FormLabel>Subcategory</FormLabel>
+                      <Select 
+                        onValueChange={field.onChange} 
+                        value={field.value} 
+                        disabled={isSubmitting || !selectedCategoryObj || selectedCategoryObj.subcategories.length === 0}
+                      >
+                        <FormControl><SelectTrigger><SelectValue placeholder="Select a subcategory" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {selectedCategoryObj?.subcategories.map(subcat => (
+                            <SelectItem key={subcat.slug} value={subcat.slug}>{subcat.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -223,7 +292,7 @@ export default function AdminAddProductPage() {
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                             <div className="space-y-0.5">
                                 <FormLabel>Publish Product</FormLabel>
-                                <CardDescription className="text-xs">Make this product visible on the storefront.</CardDescription>
+                                <FormDescription className="text-xs">Make this product visible on the storefront.</FormDescription>
                             </div>
                             <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} /></FormControl>
                         </FormItem>
