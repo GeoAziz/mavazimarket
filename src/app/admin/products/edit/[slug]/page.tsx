@@ -26,12 +26,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { doc, getDoc, updateDoc, deleteDoc, Timestamp, collection, query, where, getDocs } from "firebase/firestore";
+import { doc, getDoc, updateDoc, deleteDoc, Timestamp, collection, query, where, getDocs, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import type { Product, Category } from "@/lib/types";
 import { Skeleton } from "@/components/ui/skeleton";
-
+import Image from "next/image";
 
 interface EditProductPageProps {
   params: { slug: string }; 
@@ -47,7 +47,7 @@ const productFormSchema = z.object({
   sku: z.string().optional().default(""),
   brand: z.string().optional().default(""),
   material: z.string().optional().default(""),
-  images: z.string().optional().describe("Comma-separated image URLs").default(""),
+  // images field is for form handling, actual image URLs will be an array in Firestore
   sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)").default(""),
   colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)").default(""),
   tags: z.string().optional().describe("Comma-separated tags (e.g., new-arrival,best-seller)").default(""),
@@ -67,11 +67,19 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
   const [productId, setProductId] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
 
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]); // For new uploads
+  const [existingImageUrls, setExistingImageUrls] = useState<string[]>([]); // For current images
+
   const slug = use(paramsFromProps).slug;
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
-    defaultValues: productFormSchema.parse({}), // Initialize with Zod defaults
+    defaultValues: {
+      name: "", description: "", price: 0, category: "", subcategory: "",
+      stockQuantity: 0, sku: "", brand: "", material: "",
+      sizes: "", colors: "", tags: "", isPublished: true, dataAiHint: "",
+    },
   });
 
   useEffect(() => {
@@ -101,6 +109,7 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
           const productData = productDoc.data() as Product;
           setProductToEdit({ ...productData, id: productDoc.id });
           setProductId(productDoc.id);
+          setExistingImageUrls(productData.images || []);
           form.reset({
             name: productData.name || "",
             description: productData.description || "",
@@ -111,16 +120,17 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
             sku: productData.id || "", // Using firestore ID as SKU for mock
             brand: productData.brand || "",
             material: productData.material || "",
-            images: productData.images?.join(',') || "",
+            // images: field removed, handled by state now
             sizes: productData.sizes?.join(',') || "",
             colors: productData.colors?.join(',') || "",
             tags: productData.tags?.join(',') || "",
-            isPublished: productData.stockQuantity > 0, // Or use a specific published field if you add one
+            isPublished: productData.isPublished !== undefined ? productData.isPublished : true,
             dataAiHint: productData.dataAiHint || "",
           });
         } else {
           toast({ title: "Error", description: `Product with slug "${slug}" not found.`, variant: "destructive" });
           setProductToEdit(null);
+          router.push('/admin/products');
         }
       } catch (error) {
         console.error("Error fetching product:", error);
@@ -129,8 +139,29 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
       setIsLoadingProduct(false);
     };
     fetchProduct();
-  }, [slug, form, toast]);
+  }, [slug, form, toast, router]);
 
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const filesArray = Array.from(event.target.files);
+      setImageFiles(prevFiles => [...prevFiles, ...filesArray]);
+      const newPreviews = filesArray.map(file => URL.createObjectURL(file));
+      setImagePreviews(prevPreviews => [...prevPreviews, ...newPreviews]);
+    }
+  };
+
+  const removeNewImagePreview = (index: number) => {
+    setImageFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
+    setImagePreviews(prevPreviews => {
+      const urlToRevoke = prevPreviews[index];
+      URL.revokeObjectURL(urlToRevoke);
+      return prevPreviews.filter((_, i) => i !== index);
+    });
+  };
+  
+  const removeExistingImage = (index: number) => {
+    setExistingImageUrls(prevUrls => prevUrls.filter((_, i) => i !== index));
+  };
 
   async function onSubmit(data: ProductFormValues) {
     if (!productId) {
@@ -139,20 +170,28 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
     }
     setIsSaving(true);
     try {
+      // Placeholder for Firebase Storage upload logic for imageFiles
+      // For now, we'll merge existing URLs with mock URLs for new files
+      const newImageMockUrls = imageFiles.map(file => `https://placeholder.com/new/${file.name}`); // Mock
+      const finalImageUrls = [...existingImageUrls, ...newImageMockUrls];
+
       const productRef = doc(db, "products", productId);
       const updatedProductData = {
         ...data,
-        images: data.images ? data.images.split(',').map(img => img.trim()).filter(img => img) : [],
+        images: finalImageUrls, // Use the combined/updated list of URLs
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : [],
         colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : [],
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : [],
-        updatedAt: Timestamp.now(),
+        updatedAt: serverTimestamp(),
       };
       await updateDoc(productRef, updatedProductData);
       toast({
         title: "Product Updated!",
         description: `${data.name} has been successfully updated.`,
       });
+      setImageFiles([]); // Clear newly added files after save
+      setImagePreviews([]); // Clear previews
+      // existingImageUrls will be refetched if the component reloads or user navigates away and back
     } catch (error) {
       console.error("Error updating product:", error);
       toast({ title: "Error", description: "Could not update product.", variant: "destructive" });
@@ -168,6 +207,7 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
     setIsDeleting(true);
     try {
       await deleteDoc(doc(db, "products", productId));
+      // TODO: Delete associated images from Firebase Storage
       toast({
         title: "Product Deleted",
         description: `Product ${productToEdit?.name || slug} has been deleted.`,
@@ -179,6 +219,14 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
     }
     setIsDeleting(false);
   }
+  
+  // Cleanup object URLs on component unmount
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [imagePreviews]);
+
 
   if (isLoadingProduct) {
     return (
@@ -249,14 +297,49 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
               <Card className="shadow-md">
                  <CardHeader><CardTitle className="flex items-center"><UploadCloud className="mr-2 text-primary/80"/>Media</CardTitle></CardHeader>
                  <CardContent>
-                    <FormField control={form.control} name="images" render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Image URLs (comma-separated)</FormLabel>
-                        <FormControl><Textarea placeholder="https://placehold.co/600x800.png" {...field} rows={2} disabled={isSaving || isDeleting}/></FormControl>
-                        <FormDescription>Enter image URLs separated by commas. First image is the primary.</FormDescription>
-                        <FormMessage />
-                        </FormItem>
-                    )} />
+                    <FormItem>
+                      <FormLabel>Product Images</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="file" 
+                          multiple 
+                          onChange={handleImageChange} 
+                          disabled={isSaving || isDeleting}
+                          className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        />
+                      </FormControl>
+                      <FormDescription>Add new images. Existing images are shown below. To remove an existing image, click the trash icon on it.</FormDescription>
+                    </FormItem>
+                    <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                      {existingImageUrls.map((url, index) => (
+                        <div key={`existing-${index}`} className="relative group aspect-square">
+                          <Image src={url} alt={`Existing Image ${index + 1}`} fill style={{objectFit:"cover"}} className="rounded-md" data-ai-hint={productToEdit?.dataAiHint || "product image"}/>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => removeExistingImage(index)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      ))}
+                      {imagePreviews.map((previewUrl, index) => (
+                        <div key={`new-${index}`} className="relative group aspect-square border-2 border-dashed border-accent p-1">
+                          <Image src={previewUrl} alt={`New Preview ${index + 1}`} fill style={{objectFit:"cover"}} className="rounded-md" />
+                           <Button
+                            type="button"
+                            variant="destructive"
+                            size="icon"
+                            className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                            onClick={() => removeNewImagePreview(index)}
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
                      <FormField control={form.control} name="dataAiHint" render={({ field }) => (
                         <FormItem className="mt-4">
                         <FormLabel>Image AI Hint (Optional)</FormLabel>
@@ -334,7 +417,7 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                       <Select 
                         onValueChange={field.onChange} 
                         value={field.value || ""} 
-                        disabled={isSaving || isDeleting || !selectedCategoryObj || selectedCategoryObj.subcategories.length === 0}
+                        disabled={isSaving || isDeleting || !selectedCategoryObj || !selectedCategoryObj.subcategories || selectedCategoryObj.subcategories.length === 0}
                       >
                         <FormControl><SelectTrigger><SelectValue placeholder="Select a subcategory" /></SelectTrigger></FormControl>
                         <SelectContent>
@@ -401,6 +484,7 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                 <AlertDialogFooter>
                   <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
                   <AlertDialogAction onClick={handleDeleteProduct} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+                    {isDeleting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Yes, delete product
                   </AlertDialogAction>
                 </AlertDialogFooter>
@@ -408,23 +492,29 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
             </AlertDialog>
 
             <div className="space-x-2">
-                <Button type="button" variant="outline" onClick={() => form.reset(productFormSchema.parse(productToEdit ? {
-                    name: productToEdit.name || "",
-                    description: productToEdit.description || "",
-                    price: productToEdit.price || 0,
-                    category: productToEdit.category || "",
-                    subcategory: productToEdit.subcategory || "",
-                    stockQuantity: productToEdit.stockQuantity || 0,
-                    sku: productToEdit.id || "",
-                    brand: productToEdit.brand || "",
-                    material: productToEdit.material || "",
-                    images: productToEdit.images?.join(',') || "",
-                    sizes: productToEdit.sizes?.join(',') || "",
-                    colors: productToEdit.colors?.join(',') || "",
-                    tags: productToEdit.tags?.join(',') || "",
-                    isPublished: productToEdit.stockQuantity > 0,
-                    dataAiHint: productToEdit.dataAiHint || "",
-                } : {}))} disabled={isSaving || isDeleting}>
+                <Button type="button" variant="outline" onClick={() => {
+                  if (productToEdit) {
+                     form.reset({
+                        name: productToEdit.name || "",
+                        description: productToEdit.description || "",
+                        price: productToEdit.price || 0,
+                        category: productToEdit.category || "",
+                        subcategory: productToEdit.subcategory || "",
+                        stockQuantity: productToEdit.stockQuantity || 0,
+                        sku: productToEdit.id || "",
+                        brand: productToEdit.brand || "",
+                        material: productToEdit.material || "",
+                        sizes: productToEdit.sizes?.join(',') || "",
+                        colors: productToEdit.colors?.join(',') || "",
+                        tags: productToEdit.tags?.join(',') || "",
+                        isPublished: productToEdit.isPublished !== undefined ? productToEdit.isPublished : true,
+                        dataAiHint: productToEdit.dataAiHint || "",
+                      });
+                      setExistingImageUrls(productToEdit.images || []);
+                      setImageFiles([]);
+                      setImagePreviews([]);
+                  }
+                }} disabled={isSaving || isDeleting}>
                 Reset Changes
                 </Button>
                 <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSaving || isDeleting}>

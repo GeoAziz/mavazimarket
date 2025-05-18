@@ -11,34 +11,36 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { PlusCircle, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Loader2 } from 'lucide-react';
+import { PlusCircle, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Loader2, ArrowLeft, Trash2 } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { collection, addDoc, Timestamp, getDocs } from "firebase/firestore"; // Added getDocs
+import { collection, addDoc, Timestamp, getDocs, serverTimestamp } from "firebase/firestore"; 
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
-import type { Category } from "@/lib/types"; // For fetching categories
+import type { Category } from "@/lib/types"; 
+import Image from "next/image";
 
-// Function to generate slug (simplified)
 const generateSlug = (name: string) => {
   return name
     .toLowerCase()
-    .replace(/\s+/g, '-') // Replace spaces with -
-    .replace(/[^\w-]+/g, ''); // Remove all non-word chars
+    .replace(/\s+/g, '-') 
+    .replace(/[^\w-]+/g, '');
 };
 
 const productFormSchema = z.object({
-  name: z.string().min(3, "Product name must be at least 3 characters."),
-  description: z.string().min(10, "Description must be at least 10 characters."),
+  name: z.string().min(3, "Product name must be at least 3 characters.").default(""),
+  description: z.string().min(10, "Description must be at least 10 characters.").default(""),
   price: z.coerce.number().positive("Price must be a positive number.").default(0),
-  category: z.string().min(1, "Category is required."),
+  category: z.string().min(1, "Category is required.").default(""),
   subcategory: z.string().optional().default(""),
   stockQuantity: z.coerce.number().int().min(0, "Stock can't be negative.").default(0),
   sku: z.string().optional().default(""),
   brand: z.string().optional().default(""),
   material: z.string().optional().default(""),
-  images: z.string().optional().describe("Comma-separated image URLs").default(""),
+  // images field is for form handling, actual image URLs will be an array in Firestore
+  // For file input, we don't validate FileList directly with Zod easily here.
+  // We'll handle FileList in state and process it on submit.
   sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)").default(""),
   colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)").default(""),
   tags: z.string().optional().describe("Comma-separated tags (e.g., new-arrival,best-seller)").default(""),
@@ -52,7 +54,9 @@ export default function AdminAddProductPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [categories, setCategories] = useState<Category[]>([]); // To populate category select
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
   useEffect(() => {
     const fetchCategories = async () => {
@@ -80,7 +84,6 @@ export default function AdminAddProductPage() {
       sku: "",
       brand: "",
       material: "",
-      images: "",
       sizes: "",
       colors: "",
       tags: "",
@@ -89,19 +92,44 @@ export default function AdminAddProductPage() {
     },
   });
 
+  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      const filesArray = Array.from(event.target.files);
+      setImageFiles(prevFiles => [...prevFiles, ...filesArray]);
+      
+      const newPreviews = filesArray.map(file => URL.createObjectURL(file));
+      setImagePreviews(prevPreviews => [...prevPreviews, ...newPreviews]);
+    }
+  };
+
+  const removeImagePreview = (index: number) => {
+    setImageFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
+    setImagePreviews(prevPreviews => {
+      const newPreviews = prevPreviews.filter((_, i) => i !== index);
+      // Revoke object URL for the removed preview to free up memory
+      URL.revokeObjectURL(prevPreviews[index]);
+      return newPreviews;
+    });
+  };
+
   async function onSubmit(data: ProductFormValues) {
     setIsSubmitting(true);
     try {
+      // Placeholder for Firebase Storage upload logic
+      // For each file in imageFiles, upload to Storage, get downloadURL
+      // For now, we'll use placeholder URLs or filenames
+      const imageUrls = imageFiles.map(file => `https://placeholder.com/${file.name}`); // Mock
+      
       const slug = generateSlug(data.name);
       const productData = {
         ...data,
         slug,
-        images: data.images ? data.images.split(',').map(img => img.trim()).filter(img => img) : [],
+        images: imageUrls, // Use uploaded image URLs here
         sizes: data.sizes ? data.sizes.split(',').map(s => s.trim()).filter(s => s) : [],
         colors: data.colors ? data.colors.split(',').map(c => c.trim()).filter(c => c) : [],
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : [],
-        createdAt: Timestamp.now(),
-        updatedAt: Timestamp.now(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
         averageRating: 0, 
       };
 
@@ -112,6 +140,8 @@ export default function AdminAddProductPage() {
         description: `${data.name} (ID: ${docRef.id}) has been successfully created.`,
       });
       form.reset(); 
+      setImageFiles([]);
+      setImagePreviews([]);
       router.push('/admin/products'); 
     } catch (error) {
       console.error("Error creating product: ", error);
@@ -124,6 +154,13 @@ export default function AdminAddProductPage() {
     setIsSubmitting(false);
   }
 
+  // Cleanup object URLs on component unmount
+  useEffect(() => {
+    return () => {
+      imagePreviews.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, [imagePreviews]);
+
   const selectedCategoryObj = categories.find(c => c.id === form.watch("category"));
 
   return (
@@ -133,7 +170,7 @@ export default function AdminAddProductPage() {
           <PlusCircle size={30} className="mr-3 text-accent" /> Add New Product
         </h1>
         <Button variant="outline" asChild>
-            <Link href="/admin/products">Back to Product List</Link>
+            <Link href="/admin/products"><ArrowLeft className="mr-2 h-4 w-4"/>Back to Product List</Link>
         </Button>
       </div>
 
@@ -166,14 +203,37 @@ export default function AdminAddProductPage() {
               <Card className="shadow-md">
                  <CardHeader><CardTitle className="flex items-center"><UploadCloud className="mr-2 text-primary/80"/>Media</CardTitle></CardHeader>
                  <CardContent>
-                    <FormField control={form.control} name="images" render={({ field }) => (
-                        <FormItem>
-                        <FormLabel>Image URLs (comma-separated)</FormLabel>
-                        <FormControl><Textarea placeholder="https://placehold.co/600x800.png, https://placehold.co/600x800.png" {...field} rows={2} disabled={isSubmitting}/></FormControl>
-                         <FormDescription>Enter image URLs separated by commas. First image is the primary.</FormDescription>
-                        <FormMessage />
-                        </FormItem>
-                    )} />
+                    <FormItem>
+                      <FormLabel>Product Images</FormLabel>
+                      <FormControl>
+                        <Input 
+                          type="file" 
+                          multiple 
+                          onChange={handleImageChange} 
+                          disabled={isSubmitting} 
+                          className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
+                        />
+                      </FormControl>
+                      <FormDescription>Upload one or more product images. First image will be primary.</FormDescription>
+                    </FormItem>
+                    {imagePreviews.length > 0 && (
+                      <div className="mt-4 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2">
+                        {imagePreviews.map((previewUrl, index) => (
+                          <div key={index} className="relative group aspect-square">
+                            <Image src={previewUrl} alt={`Preview ${index + 1}`} fill style={{objectFit:"cover"}} className="rounded-md" />
+                            <Button
+                              type="button"
+                              variant="destructive"
+                              size="icon"
+                              className="absolute top-1 right-1 h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
+                              onClick={() => removeImagePreview(index)}
+                            >
+                              <Trash2 size={14} />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                      <FormField control={form.control} name="dataAiHint" render={({ field }) => (
                         <FormItem className="mt-4">
                         <FormLabel>Image AI Hint (Optional)</FormLabel>
@@ -250,7 +310,7 @@ export default function AdminAddProductPage() {
                       <FormLabel>Subcategory</FormLabel>
                       <Select 
                         onValueChange={field.onChange} 
-                        value={field.value} 
+                        value={field.value || ""} 
                         disabled={isSubmitting || !selectedCategoryObj || !selectedCategoryObj.subcategories || selectedCategoryObj.subcategories.length === 0}
                       >
                         <FormControl><SelectTrigger><SelectValue placeholder="Select a subcategory" /></SelectTrigger></FormControl>
@@ -301,7 +361,7 @@ export default function AdminAddProductPage() {
           </div>
           
           <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => form.reset()} disabled={isSubmitting}>Clear Form</Button>
+            <Button type="button" variant="outline" onClick={() => {form.reset(); setImageFiles([]); setImagePreviews([]);}} disabled={isSubmitting}>Clear Form</Button>
             <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
               {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isSubmitting ? "Creating..." : <><PlusCircle size={18} className="mr-2" /> Create Product</>}
