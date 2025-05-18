@@ -4,17 +4,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label'; // Keep if used outside react-hook-form context
+// Label import was removed as RHFFormLabel is used
 import { Textarea } from '@/components/ui/textarea';
 import { Settings, Store, Mail, MapPin, Phone, Save, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { doc, getDoc, setDoc, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Form, FormControl, FormField, FormItem, FormLabel as RHFFormLabel, FormMessage } from '@/components/ui/form'; // Renamed FormLabel to avoid conflict
+import { Form, FormControl, FormField, FormItem, FormLabel as RHFFormLabel, FormMessage } from '@/components/ui/form';
+import { Skeleton } from '@/components/ui/skeleton'; // Added Skeleton import
 
 const settingsFormSchema = z.object({
   siteName: z.string().min(1, "Site name is required.").default("Mavazi Market"),
@@ -27,7 +28,7 @@ const settingsFormSchema = z.object({
 
 type SettingsFormValues = z.infer<typeof settingsFormSchema>;
 
-const SETTINGS_DOC_ID = "general"; // Fixed ID for the general settings document
+const SETTINGS_DOC_ID = "general";
 
 export default function AdminSettingsPage() {
   const { toast } = useToast();
@@ -36,7 +37,7 @@ export default function AdminSettingsPage() {
 
   const form = useForm<SettingsFormValues>({
     resolver: zodResolver(settingsFormSchema),
-    defaultValues: settingsFormSchema.parse({}), // Initialize with Zod defaults
+    defaultValues: settingsFormSchema.parse({}),
   });
 
   useEffect(() => {
@@ -46,9 +47,20 @@ export default function AdminSettingsPage() {
         const settingsDocRef = doc(db, "settings", SETTINGS_DOC_ID);
         const docSnap = await getDoc(settingsDocRef);
         if (docSnap.exists()) {
-          form.reset(docSnap.data() as SettingsFormValues);
+          const data = docSnap.data();
+          // Reset form with fetched data, ensuring all fields are covered
+          form.reset({
+            siteName: data.siteName || "Mavazi Market",
+            siteTagline: data.siteTagline || "Your one-stop shop for the latest fashion trends in Kenya.",
+            siteDescription: data.siteDescription || "Mavazi Market offers a wide range of clothing and accessories...",
+            publicEmail: data.publicEmail || "support@mavazimarket.co.ke",
+            publicPhone: data.publicPhone || "+254 700 123 456",
+            storeAddress: data.storeAddress || "123 Mavazi Towers, Biashara Street, Nairobi, Kenya",
+          });
         } else {
-          // If no settings exist, form will use defaultValues from schema
+          // If no settings exist, form will use defaultValues from schema parse
+          // but it's good practice to explicitly reset with defaults here too
+          form.reset(settingsFormSchema.parse({}));
           console.log("No settings document found, using defaults.");
         }
       } catch (error) {
