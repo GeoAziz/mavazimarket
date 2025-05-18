@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Package, User, MapPin, Truck, CreditCard, FileText } from 'lucide-react';
-import { mockOrders, mockProducts } from '@/lib/mock-data'; // Assuming mockOrders contains detailed items
+import { mockOrders, mockProducts, mockUser } from '@/lib/mock-data'; // Added mockUser import
 import type { Order, CartItem } from '@/lib/types';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -180,3 +180,4 @@ export default function AdminOrderDetailPage() {
     </div>
   );
 }
+
