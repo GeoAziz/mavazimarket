@@ -1,14 +1,15 @@
+
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google'; // Changed from GeistSans to Inter
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Header } from '@/components/layout/Header';
 import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
+import { AuthProvider } from '@/contexts/AuthContext';
 
-// Initialize Inter font with a CSS variable named --font-sans
 const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-sans', // Use a standard variable name for Tailwind integration
+  variable: '--font-sans',
 });
 
 export const metadata: Metadata = {
@@ -24,12 +25,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className={'font-sans antialiased flex flex-col min-h-screen'}>
-        <Header />
-        <main className="flex-grow container mx-auto px-4 py-8">
-          {children}
-        </main>
-        <Footer />
-        <Toaster />
+        <AuthProvider>
+          <Header />
+          <main className="flex-grow container mx-auto px-4 py-8">
+            {children}
+          </main>
+          <Footer />
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

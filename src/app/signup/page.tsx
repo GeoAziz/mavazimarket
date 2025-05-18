@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +15,9 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UserPlus, Mail, KeyRound, User as UserIcon, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-// import { useRouter } from 'next/navigation'; // Uncomment if you want to redirect
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { auth, db } from "@/lib/firebase";
+import { doc, setDoc } from "firebase/firestore";
 
 const signupFormSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
@@ -33,8 +36,8 @@ type SignupFormValues = z.infer<typeof signupFormSchema>;
 
 export default function SignupPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // const router = useRouter(); // Uncomment if you want to redirect
 
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupFormSchema),
@@ -43,18 +46,46 @@ export default function SignupPage() {
 
   async function onSubmit(data: SignupFormValues) {
     setIsSubmitting(true);
-    console.log("Signup attempt:", data);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast({
-      title: "Account Created!",
-      description: "Welcome to Mavazi Market! You can now log in.",
-      variant: "default",
-    });
-    // router.push('/login'); // Example redirect
-    setIsSubmitting(false);
-    form.reset(); 
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+
+      // Update Firebase Auth profile
+      await updateProfile(user, { displayName: data.fullName });
+
+      // Create user document in Firestore
+      const userDocRef = doc(db, "users", user.uid);
+      await setDoc(userDocRef, {
+        id: user.uid,
+        name: data.fullName,
+        email: data.email,
+        createdAt: new Date().toISOString(),
+        wishlist: [], // Initialize empty wishlist
+        // Add other default fields as needed from your User type
+      });
+      
+      toast({
+        title: "Account Created!",
+        description: "Welcome to Mavazi Market! You can now log in.",
+        variant: "default",
+      });
+      router.push('/login');
+    } catch (error: any) {
+      console.error("Signup error:", error);
+      let errorMessage = "Failed to create account. Please try again.";
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = "This email address is already in use.";
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = "Password is too weak. Please choose a stronger password.";
+      }
+      toast({
+        title: "Signup Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (

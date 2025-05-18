@@ -9,35 +9,83 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/componen
 import { ShoppingCart, Eye, Heart } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from 'firebase/firestore';
+import { useState, useEffect } from 'react';
 
 interface ProductCardProps {
   product: Product;
-  onOpenQuickView: (product: Product) => void; // New prop
+  onOpenQuickView: (product: Product) => void;
 }
 
 export function ProductCard({ product, onOpenQuickView }: ProductCardProps) {
   const { toast } = useToast();
+  const { currentUser, appUser } = useAuth();
+  const [isInWishlist, setIsInWishlist] = useState(false);
+  const [isWishlistLoading, setIsWishlistLoading] = useState(false);
 
-  const handleAddToCart = (e: React.MouseEvent) => {
+  useEffect(() => {
+    if (appUser && appUser.wishlist) {
+      setIsInWishlist(appUser.wishlist.includes(product.id));
+    } else {
+      setIsInWishlist(false);
+    }
+  }, [appUser, product.id]);
+
+
+  const handleAddToCart = async (e: React.MouseEvent) => {
     e.preventDefault(); 
     e.stopPropagation();
+    if (!currentUser) {
+      toast({ title: "Please Login", description: "You need to be logged in to add items to your cart.", variant: "destructive" });
+      return;
+    }
+    // TODO: Implement actual add to cart logic (e.g., update Firestore or context)
     console.log('Add to cart:', product.id, product.name);
     toast({
       title: "Added to Cart",
-      description: `${product.name} has been added to your cart.`,
+      description: `${product.name} has been added to your cart. (Mock)`,
       variant: "default",
     });
   };
 
-  const handleAddToWishlist = (e: React.MouseEvent) => {
-    e.preventDefault(); 
+  const handleToggleWishlist = async (e: React.MouseEvent) => {
+    e.preventDefault();
     e.stopPropagation();
-    console.log('Add to wishlist:', product.id, product.name);
-    toast({
-      title: "Added to Wishlist",
-      description: `${product.name} has been added to your wishlist.`,
-      variant: "default",
-    });
+    if (!currentUser) {
+      toast({ title: "Please Login", description: "You need to be logged in to manage your wishlist.", variant: "destructive" });
+      return;
+    }
+    if (!appUser) {
+        toast({ title: "Error", description: "User profile not loaded.", variant: "destructive" });
+        return;
+    }
+
+    setIsWishlistLoading(true);
+    const userWishlistRef = doc(db, "users", currentUser.uid);
+
+    try {
+      if (isInWishlist) {
+        await updateDoc(userWishlistRef, {
+          wishlist: arrayRemove(product.id)
+        });
+        toast({ title: "Removed from Wishlist", description: `${product.name} removed from your wishlist.` });
+        setIsInWishlist(false);
+      } else {
+        await updateDoc(userWishlistRef, {
+          wishlist: arrayUnion(product.id)
+        });
+        toast({ title: "Added to Wishlist", description: `${product.name} added to your wishlist.` });
+        setIsInWishlist(true);
+      }
+      // Optionally, refetch appUser or update context to reflect change immediately across app
+    } catch (error) {
+      console.error("Error updating wishlist:", error);
+      toast({ title: "Error", description: "Could not update wishlist. Please try again.", variant: "destructive" });
+    } finally {
+        setIsWishlistLoading(false);
+    }
   };
 
   const handleQuickViewClick = (e: React.MouseEvent) => {
@@ -59,7 +107,6 @@ export function ProductCard({ product, onOpenQuickView }: ProductCardProps) {
               className="object-cover w-full h-full group-hover:scale-105 transition-transform duration-300"
               data-ai-hint={product.dataAiHint || 'fashion clothing'}
             />
-            {/* Hover icons overlay */}
             <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center space-x-2 z-10">
               <Button
                 variant="ghost"
@@ -67,17 +114,19 @@ export function ProductCard({ product, onOpenQuickView }: ProductCardProps) {
                 className="bg-background/80 hover:bg-background text-primary rounded-full h-10 w-10"
                 onClick={handleAddToCart}
                 aria-label="Add to cart"
+                disabled={!currentUser}
               >
                 <ShoppingCart size={20} />
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
-                className="bg-background/80 hover:bg-background text-destructive rounded-full h-10 w-10"
-                onClick={handleAddToWishlist}
-                aria-label="Add to wishlist"
+                className={`bg-background/80 hover:bg-background rounded-full h-10 w-10 ${isInWishlist ? 'text-destructive' : 'text-muted-foreground hover:text-destructive'}`}
+                onClick={handleToggleWishlist}
+                aria-label={isInWishlist ? "Remove from wishlist" : "Add to wishlist"}
+                disabled={isWishlistLoading || !currentUser}
               >
-                <Heart size={20} />
+                <Heart size={20} fill={isInWishlist ? "currentColor" : "none"}/>
               </Button>
             </div>
           </div>

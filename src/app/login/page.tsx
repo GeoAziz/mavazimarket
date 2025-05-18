@@ -5,15 +5,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { LogIn, KeyRound, Mail, Loader2 } from 'lucide-react';
+import { LogIn as LoginIcon, KeyRound, Mail, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-// import { useRouter } from 'next/navigation'; // Uncomment if you want to redirect
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 const loginFormSchema = z.object({
   email: z.string().email("Invalid email address."),
@@ -23,8 +25,8 @@ type LoginFormValues = z.infer<typeof loginFormSchema>;
 
 export default function LoginPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  // const router = useRouter(); // Uncomment if you want to redirect
 
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
@@ -33,18 +35,39 @@ export default function LoginPage() {
 
   async function onSubmit(data: LoginFormValues) {
     setIsSubmitting(true);
-    console.log("Login attempt:", data);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    toast({
-      title: "Login Successful!",
-      description: "Welcome back! Redirecting you now...",
-      variant: "default",
-    });
-    // router.push('/profile'); // Example redirect
-    setIsSubmitting(false);
-    // form.reset(); // Optionally reset form if not redirecting
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+      const user = userCredential.user;
+      
+      toast({
+        title: "Login Successful!",
+        description: "Welcome back! Redirecting you now...",
+        variant: "default",
+      });
+
+      // Check if admin (simple email check for now, custom claims are better for production)
+      const adminEmail = "admin@mixostore.com";
+      if (user.email === adminEmail) {
+        router.push('/admin');
+      } else {
+        router.push('/profile');
+      }
+    } catch (error: any) {
+      console.error("Login error:", error);
+      let errorMessage = "Failed to log in. Please check your credentials.";
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
+        errorMessage = "Invalid email or password.";
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = "Too many login attempts. Please try again later.";
+      }
+      toast({
+        title: "Login Failed",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -54,7 +77,7 @@ export default function LoginPage() {
         
         <Card className="shadow-xl w-full">
           <CardHeader className="text-center">
-            <LogIn size={48} className="mx-auto text-primary mb-3" />
+            <LoginIcon size={48} className="mx-auto text-primary mb-3" />
             <CardTitle className="text-3xl font-bold text-primary">Welcome Back!</CardTitle>
             <CardDescription>Sign in to access your account, orders, and wishlist.</CardDescription>
           </CardHeader>
