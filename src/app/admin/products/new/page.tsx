@@ -15,7 +15,7 @@ import { PlusCircle, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Laye
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
-import { collection, addDoc, Timestamp } from "firebase/firestore";
+import { collection, addDoc, Timestamp, getDocs } from "firebase/firestore"; // Added getDocs
 import { db } from "@/lib/firebase";
 import { useRouter } from "next/navigation";
 import type { Category } from "@/lib/types"; // For fetching categories
@@ -31,14 +31,14 @@ const generateSlug = (name: string) => {
 const productFormSchema = z.object({
   name: z.string().min(3, "Product name must be at least 3 characters."),
   description: z.string().min(10, "Description must be at least 10 characters."),
-  price: z.coerce.number().positive("Price must be a positive number."),
+  price: z.coerce.number().positive("Price must be a positive number.").default(0),
   category: z.string().min(1, "Category is required."),
   subcategory: z.string().optional().default(""),
   stockQuantity: z.coerce.number().int().min(0, "Stock can't be negative.").default(0),
   sku: z.string().optional().default(""),
   brand: z.string().optional().default(""),
   material: z.string().optional().default(""),
-  images: z.string().optional().describe("Comma-separated image URLs").default(""), // Storing as string for simplicity
+  images: z.string().optional().describe("Comma-separated image URLs").default(""),
   sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)").default(""),
   colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)").default(""),
   tags: z.string().optional().describe("Comma-separated tags (e.g., new-arrival,best-seller)").default(""),
@@ -102,19 +102,17 @@ export default function AdminAddProductPage() {
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : [],
         createdAt: Timestamp.now(),
         updatedAt: Timestamp.now(),
-        averageRating: 0, // Default average rating
-        // reviews will be a subcollection, so not stored directly on product
+        averageRating: 0, 
       };
 
       const docRef = await addDoc(collection(db, "products"), productData);
-      console.log("New product created with ID: ", docRef.id);
       
       toast({
         title: "Product Created!",
-        description: `${data.name} has been successfully created.`,
+        description: `${data.name} (ID: ${docRef.id}) has been successfully created.`,
       });
-      form.reset(); // Reset form after successful submission
-      router.push('/admin/products'); // Redirect to product list
+      form.reset(); 
+      router.push('/admin/products'); 
     } catch (error) {
       console.error("Error creating product: ", error);
       toast({
@@ -253,11 +251,11 @@ export default function AdminAddProductPage() {
                       <Select 
                         onValueChange={field.onChange} 
                         value={field.value} 
-                        disabled={isSubmitting || !selectedCategoryObj || selectedCategoryObj.subcategories.length === 0}
+                        disabled={isSubmitting || !selectedCategoryObj || !selectedCategoryObj.subcategories || selectedCategoryObj.subcategories.length === 0}
                       >
                         <FormControl><SelectTrigger><SelectValue placeholder="Select a subcategory" /></SelectTrigger></FormControl>
                         <SelectContent>
-                          {selectedCategoryObj?.subcategories.map(subcat => (
+                          {selectedCategoryObj?.subcategories?.map(subcat => (
                             <SelectItem key={subcat.slug} value={subcat.slug}>{subcat.name}</SelectItem>
                           ))}
                         </SelectContent>
