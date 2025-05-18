@@ -1,3 +1,4 @@
+
 "use client"
 
 import * as React from "react"
@@ -10,7 +11,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { Sheet, SheetContent } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet" // Added SheetHeader, SheetTitle
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -198,7 +199,7 @@ const Sidebar = React.forwardRef<
           <SheetContent
             data-sidebar="sidebar"
             data-mobile="true"
-            className="w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            className={cn("w-[--sidebar-width] bg-sidebar p-0 text-sidebar-foreground flex flex-col", className)} // Ensure flex-col for header + content
             style={
               {
                 "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -206,7 +207,12 @@ const Sidebar = React.forwardRef<
             }
             side={side}
           >
-            <div className="flex h-full w-full flex-col">{children}</div>
+            <SheetHeader className="p-4 border-b">
+              <SheetTitle>Menu</SheetTitle> {/* Accessibility: Title for the sheet */}
+            </SheetHeader>
+            <div className="flex-grow overflow-y-auto"> {/* Allow content to scroll if it exceeds height */}
+                {children}
+            </div>
           </SheetContent>
         </Sheet>
       )
@@ -625,7 +631,7 @@ SidebarMenuAction.displayName = "SidebarMenuAction"
 
 const SidebarMenuBadge = React.forwardRef<
   HTMLDivElement,
-  React.ComponentProps<"div">
+  React.HTMLAttributes<HTMLDivElement>
 >(({ className, ...props }, ref) => (
   <div
     ref={ref}
