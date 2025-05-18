@@ -20,15 +20,13 @@ async function populateCategories() {
   console.log('Populating categories...');
   const categoriesCollection = db.collection('categories');
   for (const category of mockCategories) {
-    // Firestore doesn't store functions or complex objects well in arrays directly sometimes
-    // For subcategories, we'll store them as they are.
     const categoryData = {
         id: category.id,
         name: category.name,
         slug: category.slug,
         image: category.image,
         dataAiHint: category.dataAiHint || null,
-        subcategories: category.subcategories.map(sub => ({...sub})) // Ensure plain objects
+        subcategories: category.subcategories.map(sub => ({...sub}))
     };
     await categoriesCollection.doc(category.id).set(categoryData);
     console.log(`Added category: ${category.name}`);
@@ -40,11 +38,10 @@ async function populateProducts() {
   console.log('Populating products...');
   const productsCollection = db.collection('products');
   for (const product of mockProducts) {
-    const { reviews, ...productData } = product; // Exclude reviews from main product doc for now
+    const { reviews, ...productData } = product; 
     await productsCollection.doc(product.id).set(productData);
     console.log(`Added product: ${product.name}`);
 
-    // If product has reviews, add them to a subcollection
     if (reviews && reviews.length > 0) {
       const reviewsSubcollection = productsCollection.doc(product.id).collection('reviews');
       for (const review of reviews) {
@@ -60,43 +57,45 @@ async function populateUsers() {
   console.log('Populating users...');
   const usersCollection = db.collection('users');
 
-  // Admin user (ensure this matches the email used for admin checks)
   const adminEmail = "admin@mixostore.com";
-  const adminPassword = "Mixo123!"; // Only for local testing/setup reference; actual auth handled by Firebase Auth
+  const adminPassword = "Mixo123!"; 
 
   try {
     let adminAuthUser = await admin.auth().getUserByEmail(adminEmail).catch(() => null);
     if (!adminAuthUser) {
+        console.log(`Admin user ${adminEmail} not found in Firebase Auth. Creating...`);
         adminAuthUser = await admin.auth().createUser({
             email: adminEmail,
-            password: adminPassword,
+            password: adminPassword, // Explicitly use the defined password
             displayName: "Admin Mavazi",
-            emailVerified: true, // For simplicity
+            emailVerified: true, 
         });
-        console.log(`Created admin auth user: ${adminAuthUser.uid} - ${adminEmail}`);
-        // IMPORTANT: Set custom claim for admin role
-        // This needs to be done for the Firestore rules to work correctly for admin access.
-        await admin.auth().setCustomUserClaims(adminAuthUser.uid, { admin: true });
-        console.log(`Set admin custom claim for ${adminEmail}`);
-
+        console.log(`Successfully CREATED admin auth user: ${adminAuthUser.uid} - ${adminEmail}`);
     } else {
-        console.log(`Admin auth user ${adminEmail} already exists: ${adminAuthUser.uid}`);
-        // Ensure admin claim is set if user exists but claim might be missing
-        if (!adminAuthUser.customClaims?.admin) {
-            await admin.auth().setCustomUserClaims(adminAuthUser.uid, { admin: true });
-            console.log(`Ensured admin custom claim for ${adminEmail}`);
-        }
+        console.log(`Admin auth user ${adminEmail} ALREADY EXISTS in Firebase Auth: ${adminAuthUser.uid}`);
+        // Optionally update password if needed, but be careful with this
+        // await admin.auth().updateUser(adminAuthUser.uid, { password: adminPassword });
+        // console.log(`Updated password for existing admin user ${adminEmail}`);
     }
     
-    const adminProfileData = {
-      name: "Admin Mavazi",
-      email: adminEmail,
-      role: "admin", // You can add a role field
-      // Add other relevant fields from your User type if needed
-      // For mockUser, we'll create a separate standard user
-    };
-    await usersCollection.doc(adminAuthUser.uid).set(adminProfileData, { merge: true });
-    console.log(`Stored admin profile for ${adminEmail} in Firestore.`);
+    // Set or ensure custom claim for admin role
+    if (adminAuthUser) {
+        const currentClaims = (await admin.auth().getUser(adminAuthUser.uid)).customClaims;
+        if (!currentClaims || !currentClaims.admin) {
+            await admin.auth().setCustomUserClaims(adminAuthUser.uid, { admin: true });
+            console.log(`Successfully SET admin custom claim for ${adminEmail}.`);
+        } else {
+            console.log(`Admin custom claim ALREADY SET for ${adminEmail}.`);
+        }
+
+        const adminProfileData = {
+          name: "Admin Mavazi",
+          email: adminEmail,
+          role: "admin",
+        };
+        await usersCollection.doc(adminAuthUser.uid).set(adminProfileData, { merge: true });
+        console.log(`Stored/updated admin profile for ${adminEmail} in Firestore.`);
+    }
 
   } catch (error) {
     console.error(`Error creating/updating admin user ${adminEmail}:`, error);
@@ -104,32 +103,40 @@ async function populateUsers() {
 
 
   // Mock standard user
+  const standardUserEmail = mockUser.email;
+  const standardUserPassword = "password123"; // Mock password
+
   try {
-    let standardAuthUser = await admin.auth().getUserByEmail(mockUser.email).catch(() => null);
+    let standardAuthUser = await admin.auth().getUserByEmail(standardUserEmail).catch(() => null);
     if (!standardAuthUser) {
+        console.log(`Standard user ${standardUserEmail} not found in Firebase Auth. Creating...`);
         standardAuthUser = await admin.auth().createUser({
-            email: mockUser.email,
-            password: "password123", // Mock password, user would set their own
+            email: standardUserEmail,
+            password: standardUserPassword,
             displayName: mockUser.name,
             emailVerified: true,
         });
-        console.log(`Created standard auth user: ${standardAuthUser.uid} - ${mockUser.email}`);
+        console.log(`Successfully CREATED standard auth user: ${standardAuthUser.uid} - ${standardUserEmail}`);
     } else {
-        console.log(`Standard auth user ${mockUser.email} already exists: ${standardAuthUser.uid}`);
+        console.log(`Standard auth user ${standardUserEmail} ALREADY EXISTS in Firebase Auth: ${standardAuthUser.uid}`);
     }
     
-    const { id, orderHistory, wishlist, ...userProfileData } = mockUser; // Exclude complex objects for now
-    await usersCollection.doc(standardAuthUser.uid).set({
-        ...userProfileData,
-        wishlist: wishlist?.map(p => p.id) || [], // Store array of product IDs for wishlist
-    }, { merge: true }); // Use merge to avoid overwriting if doc exists partially
-    console.log(`Stored profile for ${mockUser.name} in Firestore.`);
+    if (standardAuthUser) {
+        const { id, orderHistory, wishlist, ...userProfileData } = mockUser; 
+        await usersCollection.doc(standardAuthUser.uid).set({
+            ...userProfileData,
+            wishlist: wishlist?.map(p => p.id) || [], 
+            email: standardUserEmail, // Ensure email is consistent
+            name: mockUser.name,
+        }, { merge: true }); 
+        console.log(`Stored/updated profile for ${mockUser.name} (${standardUserEmail}) in Firestore.`);
+    }
 
   } catch (error) {
-    console.error(`Error creating/updating standard user ${mockUser.email}:`, error);
+    console.error(`Error creating/updating standard user ${standardUserEmail}:`, error);
   }
 
-  console.log('Users populated/updated.');
+  console.log('Users population process finished.');
 }
 
 
@@ -137,7 +144,6 @@ async function populateOrders() {
     console.log('Populating orders...');
     const ordersCollection = db.collection('orders');
     
-    // Find the UID for mockUser to associate orders
     let mockUserAuth;
     try {
         mockUserAuth = await admin.auth().getUserByEmail(mockUser.email);
@@ -154,9 +160,9 @@ async function populateOrders() {
     for (const order of mockOrders) {
         const orderData = {
             ...order,
-            userId: mockUserAuth.uid, // Associate order with user UID
-            orderDate: admin.firestore.Timestamp.fromDate(new Date(order.orderDate)), // Convert to Firestore Timestamp
-            items: order.items.map(item => ({...item})) // Ensure plain objects
+            userId: mockUserAuth.uid, 
+            orderDate: admin.firestore.Timestamp.fromDate(new Date(order.orderDate)),
+            items: order.items.map(item => ({...item})) 
         };
         await ordersCollection.doc(order.id).set(orderData);
         console.log(`Added order: ${order.id} for user ${mockUser.email}`);
@@ -168,9 +174,9 @@ async function populateOrders() {
 async function main() {
   try {
     await populateCategories();
-    await populateProducts(); // Populates products and their reviews
-    await populateUsers();    // Creates auth users and Firestore profiles
-    await populateOrders();   // Populates orders for the mock user
+    await populateProducts(); 
+    await populateUsers();    
+    await populateOrders();   
 
     console.log('Firestore database populated successfully!');
   } catch (error) {
