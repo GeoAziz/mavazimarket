@@ -14,42 +14,65 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Users, Search, UserPlus, ChevronLeft, ChevronRight } from 'lucide-react';
-import { mockUser } from '@/lib/mock-data'; 
+import { Users, Search, UserPlus, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import type { User } from '@/lib/types';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
+import { collection, getDocs, query, orderBy, limit, startAfter, DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const mockCustomers: User[] = [
-  mockUser,
-  { ...mockUser, id: 'mockuser02', name: 'Amina Wanjiru', email: 'amina@example.com', profilePictureUrl: 'https://placehold.co/40x40.png?text=AW' },
-  { ...mockUser, id: 'mockuser03', name: 'John Okello', email: 'john.o@example.com', profilePictureUrl: 'https://placehold.co/40x40.png?text=JO'  },
-];
-
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_PAGE = 10; // For client-side pagination
 
 export default function AdminCustomersPage() {
-  const [customers, setCustomers] = useState<User[]>(mockCustomers); // In a real app, fetch this data
+  const [customers, setCustomers] = useState<User[]>([]);
+  const [allFetchedCustomers, setAllFetchedCustomers] = useState<User[]>([]);
   const [selectedCustomerIds, setSelectedCustomerIds] = useState<string[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+
+  // For server-side infinite scroll (optional, current setup is client-side pagination)
+  // const [loadingMore, setLoadingMore] = useState(false);
+  // const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  // const [hasMore, setHasMore] = useState(true);
+
+  useEffect(() => {
+    const fetchCustomers = async () => {
+      setLoading(true);
+      try {
+        const usersRef = collection(db, "users");
+        // Simple fetch all for now, can add server-side pagination later
+        const q = query(usersRef, orderBy("name")); // Assuming 'name' field exists for sorting
+        const querySnapshot = await getDocs(q);
+        const fetchedCustomers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+        setCustomers(fetchedCustomers);
+        setAllFetchedCustomers(fetchedCustomers);
+      } catch (error) {
+        console.error("Error fetching customers:", error);
+      }
+      setLoading(false);
+    };
+    fetchCustomers();
+  }, []);
+
 
   const filteredCustomers = useMemo(() => {
-    return customers.filter(customer => 
+    return allFetchedCustomers.filter(customer =>
       customer.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       customer.shippingAddress?.city?.toLowerCase().includes(searchTerm.toLowerCase())
     );
-  }, [customers, searchTerm]);
+  }, [allFetchedCustomers, searchTerm]);
 
   const totalPages = Math.ceil(filteredCustomers.length / ITEMS_PER_PAGE);
   const paginatedCustomers = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredCustomers.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredCustomers, currentPage]);
-  
+
   const handleSelectCustomer = (customerId: string, checked: boolean | string) => {
-    setSelectedCustomerIds(prev => 
+    setSelectedCustomerIds(prev =>
       checked ? [...prev, customerId] : prev.filter(id => id !== customerId)
     );
   };
@@ -73,18 +96,18 @@ export default function AdminCustomersPage() {
           <Users size={30} className="mr-3 text-accent" /> Manage Customers
         </h1>
         <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <UserPlus size={20} className="mr-2" /> Add New Customer
+          <UserPlus size={20} className="mr-2" /> Add New Customer (Mock)
         </Button>
       </div>
 
-      <Card className="shadow-lg">
+      <Card className="shadow-lg w-full">
         <CardHeader>
           <CardTitle className="text-xl">Customer List</CardTitle>
           <div className="mt-4 relative">
-            <Input 
-              type="search" 
-              placeholder="Search customers (name, email, city...)" 
-              className="pl-10 w-full md:w-1/2" 
+            <Input
+              type="search"
+              placeholder="Search customers (name, email, city...)"
+              className="pl-10 w-full md:w-1/2"
               value={searchTerm}
               onChange={(e) => {
                 setSearchTerm(e.target.value);
@@ -100,7 +123,7 @@ export default function AdminCustomersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]">
-                     <Checkbox 
+                     <Checkbox
                       checked={isAllSelected || (isSomeSelected && 'indeterminate')}
                       onCheckedChange={handleSelectAll}
                       aria-label="Select all customers on this page"
@@ -110,15 +133,30 @@ export default function AdminCustomersPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>City</TableHead>
-                  <TableHead>Total Orders</TableHead>
+                  <TableHead>Total Orders (Mock)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedCustomers.length > 0 ? paginatedCustomers.map((customer) => (
+                {loading && paginatedCustomers.length === 0 ? (
+                    [...Array(5)].map((_, i) => (
+                        <TableRow key={`skeleton-customer-${i}`}>
+                            <TableCell><Skeleton className="h-5 w-5 rounded" /></TableCell>
+                            <TableCell><Skeleton className="h-9 w-9 rounded-full" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-1/2" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                            <TableCell className="text-right space-x-2">
+                                <Skeleton className="h-8 w-8 rounded-md inline-block" />
+                                <Skeleton className="h-8 w-8 rounded-md inline-block" />
+                            </TableCell>
+                        </TableRow>
+                    ))
+                ) : paginatedCustomers.length > 0 ? paginatedCustomers.map((customer) => (
                   <TableRow key={customer.id} data-state={selectedCustomerIds.includes(customer.id) ? "selected" : ""}>
                     <TableCell>
-                       <Checkbox 
+                       <Checkbox
                         checked={selectedCustomerIds.includes(customer.id)}
                         onCheckedChange={(checked) => handleSelectCustomer(customer.id, checked)}
                         aria-label={`Select customer ${customer.name}`}
@@ -126,15 +164,15 @@ export default function AdminCustomersPage() {
                     </TableCell>
                     <TableCell>
                       <Avatar className="h-9 w-9">
-                        <AvatarImage src={customer.profilePictureUrl} alt={customer.name} data-ai-hint={customer.dataAiHint || 'avatar person'} />
+                        <AvatarImage src={customer.profilePictureUrl || `https://placehold.co/40x40.png?text=${customer.name?.substring(0,1)}`} alt={customer.name} data-ai-hint={customer.dataAiHint || 'avatar person'} />
                         <AvatarFallback>{customer.name?.substring(0,2).toUpperCase()}</AvatarFallback>
                       </Avatar>
                     </TableCell>
-                    <TableCell className="font-medium text-foreground">{customer.name}</TableCell>
-                    <TableCell className="text-muted-foreground">{customer.email}</TableCell>
-                    <TableCell className="text-muted-foreground">{customer.shippingAddress?.city || 'N/A'}</TableCell>
-                    <TableCell className="text-muted-foreground">{customer.orderHistory?.length || 0}</TableCell>
-                    <TableCell className="text-right space-x-2">
+                    <TableCell className="font-medium text-foreground whitespace-nowrap">{customer.name}</TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">{customer.email}</TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">{customer.shippingAddress?.city || 'N/A'}</TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">{customer.orderHistory?.length || 0}</TableCell>
+                    <TableCell className="text-right space-x-2 whitespace-nowrap">
                       <Button variant="ghost" size="sm" asChild>
                         <Link href={`/admin/customers/${customer.id}`}>View</Link>
                       </Button>
@@ -155,8 +193,8 @@ export default function AdminCustomersPage() {
       </Card>
       {totalPages > 1 && (
         <div className="flex items-center justify-between pt-4">
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
             disabled={currentPage === 1}
@@ -166,8 +204,8 @@ export default function AdminCustomersPage() {
           <span className="text-sm text-muted-foreground">
             Page {currentPage} of {totalPages}
           </span>
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
             disabled={currentPage === totalPages}

@@ -3,7 +3,6 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { mockProducts } from '@/lib/mock-data';
 import type { Product } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -17,50 +16,117 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { PlusCircle, Edit, Trash2, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { PlusCircle, Edit, Trash2, Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { collection, query, orderBy, limit, getDocs, startAfter, DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const ITEMS_PER_PAGE = 5;
+const ITEMS_PER_FETCH = 10; // Number of products to fetch each time
 
 export default function AdminProductsPage() {
-  const [products, setProducts] = useState<Product[]>(mockProducts); // In a real app, fetch this data
+  const [products, setProducts] = useState<Product[]>([]);
+  const [allFetchedProducts, setAllFetchedProducts] = useState<Product[]>([]); // For client-side search
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [hasMore, setHasMore] = useState(true);
 
-  const filteredProducts = useMemo(() => {
-    return products.filter(product => 
-      product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.subcategory.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      product.brand?.toLowerCase().includes(searchTerm.toLowerCase())
+  const fetchProducts = useCallback(async (initialFetch = false) => {
+    if (!hasMore && !initialFetch) return;
+
+    if (initialFetch) {
+      setLoading(true);
+      setProducts([]);
+      setAllFetchedProducts([]);
+      setLastVisible(null);
+      setHasMore(true); // Reset hasMore for a fresh fetch
+    } else {
+      setLoadingMore(true);
+    }
+
+    try {
+      const productsRef = collection(db, "products");
+      let q;
+      if (initialFetch || !lastVisible) {
+        q = query(productsRef, orderBy("name"), limit(ITEMS_PER_FETCH));
+      } else {
+        q = query(productsRef, orderBy("name"), startAfter(lastVisible), limit(ITEMS_PER_FETCH));
+      }
+
+      const documentSnapshots = await getDocs(q);
+      const newProducts = documentSnapshots.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+      
+      setProducts(prev => initialFetch ? newProducts : [...prev, ...newProducts]);
+      setAllFetchedProducts(prev => initialFetch ? newProducts : [...prev, ...newProducts]); // Keep a separate list for search
+      
+      const lastDoc = documentSnapshots.docs[documentSnapshots.docs.length - 1];
+      setLastVisible(lastDoc || null);
+      setHasMore(documentSnapshots.docs.length === ITEMS_PER_FETCH);
+
+    } catch (error) {
+      console.error("Error fetching products:", error);
+      setHasMore(false); // Stop trying if error
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }, [lastVisible, hasMore]);
+
+  useEffect(() => {
+    fetchProducts(true); // Initial fetch
+  }, [fetchProducts]); // fetchProducts is memoized, safe to add
+
+  useEffect(() => {
+    if (!searchTerm) {
+      setProducts(allFetchedProducts); // If search is cleared, show all fetched products
+      // Potentially re-enable infinite scroll if it was stopped by search
+      setHasMore(allFetchedProducts.length > 0 && allFetchedProducts.length % ITEMS_PER_FETCH === 0); 
+      return;
+    }
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    const filtered = allFetchedProducts.filter(product =>
+      product.name.toLowerCase().includes(lowerSearchTerm) ||
+      product.category.toLowerCase().includes(lowerSearchTerm) ||
+      (product.subcategory && product.subcategory.toLowerCase().includes(lowerSearchTerm)) ||
+      (product.brand && product.brand.toLowerCase().includes(lowerSearchTerm))
     );
-  }, [products, searchTerm]);
+    setProducts(filtered);
+    setHasMore(false); // Disable infinite scroll when searching client-side
+  }, [searchTerm, allFetchedProducts]);
 
-  const totalPages = Math.ceil(filteredProducts.length / ITEMS_PER_PAGE);
-  const paginatedProducts = useMemo(() => {
-    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-  }, [filteredProducts, currentPage]);
 
   const handleSelectProduct = (productId: string, checked: boolean | string) => {
-    setSelectedProductIds(prev => 
+    setSelectedProductIds(prev =>
       checked ? [...prev, productId] : prev.filter(id => id !== productId)
     );
   };
 
   const handleSelectAll = (checked: boolean | string) => {
     if (checked) {
-      setSelectedProductIds(paginatedProducts.map(p => p.id));
+      setSelectedProductIds(products.map(p => p.id));
     } else {
       setSelectedProductIds([]);
     }
   };
 
-  const isAllSelected = paginatedProducts.length > 0 && selectedProductIds.length === paginatedProducts.length;
-  const isSomeSelected = selectedProductIds.length > 0 && selectedProductIds.length < paginatedProducts.length;
+  const isAllSelected = products.length > 0 && selectedProductIds.length === products.length;
+  const isSomeSelected = selectedProductIds.length > 0 && selectedProductIds.length < products.length;
 
+  // Infinite scroll handler
+  useEffect(() => {
+    const handleScroll = () => {
+      if (searchTerm) return; // Don't load more if searching
+      if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 200 && hasMore && !loadingMore) {
+        fetchProducts();
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [fetchProducts, hasMore, loadingMore, searchTerm]);
 
   return (
     <div className="space-y-6">
@@ -78,15 +144,12 @@ export default function AdminProductsPage() {
         <CardHeader>
           <CardTitle className="text-xl">Product List</CardTitle>
            <div className="mt-4 relative">
-            <Input 
-              type="search" 
-              placeholder="Search products (name, category, brand...)" 
-              className="pl-10 w-full md:w-1/2" 
+            <Input
+              type="search"
+              placeholder="Search products (name, category, brand...)"
+              className="pl-10 w-full md:w-1/2"
               value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1); // Reset to first page on search
-              }}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
           </div>
@@ -97,7 +160,7 @@ export default function AdminProductsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]">
-                    <Checkbox 
+                    <Checkbox
                       checked={isAllSelected || (isSomeSelected && 'indeterminate')}
                       onCheckedChange={handleSelectAll}
                       aria-label="Select all products on this page"
@@ -113,10 +176,26 @@ export default function AdminProductsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedProducts.length > 0 ? paginatedProducts.map((product) => (
+                {loading && products.length === 0 ? (
+                  [...Array(5)].map((_, i) => (
+                    <TableRow key={`skeleton-${i}`}>
+                      <TableCell><Skeleton className="h-5 w-5 rounded" /></TableCell>
+                      <TableCell><Skeleton className="h-16 w-12 rounded-md" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-1/2" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-1/4" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-1/4" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-20 rounded-full" /></TableCell>
+                      <TableCell className="text-right space-x-1">
+                        <Skeleton className="h-8 w-8 rounded-md inline-block" />
+                        <Skeleton className="h-8 w-8 rounded-md inline-block" />
+                      </TableCell>
+                    </TableRow>
+                  ))
+                ) : products.length > 0 ? products.map((product) => (
                   <TableRow key={product.id} data-state={selectedProductIds.includes(product.id) ? "selected" : ""}>
                     <TableCell>
-                      <Checkbox 
+                      <Checkbox
                         checked={selectedProductIds.includes(product.id)}
                         onCheckedChange={(checked) => handleSelectProduct(product.id, checked)}
                         aria-label={`Select product ${product.name}`}
@@ -124,7 +203,7 @@ export default function AdminProductsPage() {
                     </TableCell>
                     <TableCell>
                       <Image
-                        src={product.images[0]}
+                        src={product.images && product.images.length > 0 ? product.images[0] : 'https://placehold.co/48x64.png'}
                         alt={product.name}
                         width={48}
                         height={64}
@@ -137,7 +216,7 @@ export default function AdminProductsPage() {
                     <TableCell className="text-muted-foreground">{product.price.toLocaleString()}</TableCell>
                     <TableCell className="text-muted-foreground">{product.stockQuantity}</TableCell>
                     <TableCell>
-                      <Badge variant={product.stockQuantity > 0 ? 'default' : 'destructive'} 
+                      <Badge variant={product.stockQuantity > 0 ? 'default' : 'destructive'}
                             className={product.stockQuantity > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}>
                         {product.stockQuantity > 0 ? 'In Stock' : 'Out of Stock'}
                       </Badge>
@@ -160,35 +239,22 @@ export default function AdminProductsPage() {
                     </TableCell>
                   </TableRow>
                 )}
+                {loadingMore && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="text-center">
+                      <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary my-4" />
+                    </TableCell>
+                  </TableRow>
+                )}
               </TableBody>
             </Table>
           </div>
+          {!loading && !hasMore && products.length > 0 && !searchTerm && (
+            <p className="text-center text-sm text-muted-foreground py-4">All products loaded.</p>
+          )}
         </CardContent>
       </Card>
-      
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between pt-4">
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-            disabled={currentPage === 1}
-          >
-            <ChevronLeft className="mr-1 h-4 w-4" /> Previous
-          </Button>
-          <span className="text-sm text-muted-foreground">
-            Page {currentPage} of {totalPages}
-          </span>
-          <Button 
-            variant="outline" 
-            size="sm"
-            onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-            disabled={currentPage === totalPages}
-          >
-            Next <ChevronRight className="ml-1 h-4 w-4" />
-          </Button>
-        </div>
-      )}
+
       {selectedProductIds.length > 0 && (
         <div className="mt-4 p-2 bg-muted rounded-md text-sm text-muted-foreground">
           {selectedProductIds.length} product(s) selected. (Bulk actions placeholder)
