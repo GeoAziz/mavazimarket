@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -10,7 +11,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { UserPlus, Mail, KeyRound, User as UserIcon } from 'lucide-react';
+import { UserPlus, Mail, KeyRound, User as UserIcon, Loader2 } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+// import { useRouter } from 'next/navigation'; // Uncomment if you want to redirect
 
 const signupFormSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
@@ -22,26 +26,39 @@ const signupFormSchema = z.object({
   }),
 }).refine(data => data.password === data.confirmPassword, {
   message: "Passwords don't match",
-  path: ["confirmPassword"], // Set error on confirmPassword field
+  path: ["confirmPassword"], 
 });
 
 type SignupFormValues = z.infer<typeof signupFormSchema>;
 
 export default function SignupPage() {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // const router = useRouter(); // Uncomment if you want to redirect
+
   const form = useForm<SignupFormValues>({
     resolver: zodResolver(signupFormSchema),
     defaultValues: { fullName: "", email: "", password: "", confirmPassword: "", agreeToTerms: false },
   });
 
-  function onSubmit(data: SignupFormValues) {
+  async function onSubmit(data: SignupFormValues) {
+    setIsSubmitting(true);
     console.log("Signup attempt:", data);
-    // Handle signup logic here
-    alert("Account created successfully! (Mock - Redirecting to login...)");
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast({
+      title: "Account Created!",
+      description: "Welcome to Mavazi Market! You can now log in.",
+      variant: "default",
+    });
     // router.push('/login'); // Example redirect
+    setIsSubmitting(false);
+    form.reset(); 
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] py-10"> {/* Adjust min-h as needed */}
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] py-10">
        <div className="w-full max-w-md">
         <Breadcrumbs items={[{ label: 'Sign Up' }]} className="mb-4 justify-center" />
         
@@ -57,7 +74,7 @@ export default function SignupPage() {
                  <FormField control={form.control} name="fullName" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><UserIcon size={16} className="mr-2 text-muted-foreground"/>Full Name</FormLabel>
-                      <FormControl><Input placeholder="e.g. Amina Wanjiru" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g. Amina Wanjiru" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -65,7 +82,7 @@ export default function SignupPage() {
                 <FormField control={form.control} name="email" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><Mail size={16} className="mr-2 text-muted-foreground"/>Email Address</FormLabel>
-                      <FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl>
+                      <FormControl><Input type="email" placeholder="you@example.com" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -73,7 +90,7 @@ export default function SignupPage() {
                 <FormField control={form.control} name="password" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><KeyRound size={16} className="mr-2 text-muted-foreground"/>Password</FormLabel>
-                      <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
+                      <FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -81,7 +98,7 @@ export default function SignupPage() {
                 <FormField control={form.control} name="confirmPassword" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><KeyRound size={16} className="mr-2 text-muted-foreground"/>Confirm Password</FormLabel>
-                      <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
+                      <FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -95,6 +112,7 @@ export default function SignupPage() {
                         <Checkbox
                           checked={field.value}
                           onCheckedChange={field.onChange}
+                          disabled={isSubmitting}
                         />
                       </FormControl>
                       <div className="space-y-1 leading-none">
@@ -109,8 +127,9 @@ export default function SignupPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Creating Account..." : "Create Account"}
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmitting ? "Creating Account..." : "Create Account"}
                 </Button>
               </form>
             </Form>

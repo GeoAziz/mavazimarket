@@ -1,12 +1,30 @@
 
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Settings, Store, Mail, MapPin, Phone, Save } from 'lucide-react';
+import { Settings, Store, Mail, MapPin, Phone, Save, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { useState } from 'react';
 
 export default function AdminSettingsPage() {
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    toast({
+      title: "Settings Saved",
+      description: "Your site settings have been updated.",
+    });
+    setIsSaving(false);
+  };
+
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold text-primary flex items-center">
@@ -20,15 +38,15 @@ export default function AdminSettingsPage() {
         <CardContent className="space-y-4">
           <div>
             <Label htmlFor="site-name">Site Name</Label>
-            <Input id="site-name" defaultValue="Mavazi Market" />
+            <Input id="site-name" defaultValue="Mavazi Market" disabled={isSaving} />
           </div>
           <div>
             <Label htmlFor="site-tagline">Site Tagline</Label>
-            <Input id="site-tagline" defaultValue="Your one-stop shop for the latest fashion trends in Kenya." />
+            <Input id="site-tagline" defaultValue="Your one-stop shop for the latest fashion trends in Kenya." disabled={isSaving} />
           </div>
            <div>
             <Label htmlFor="site-description">Site Description (for SEO)</Label>
-            <Textarea id="site-description" defaultValue="Mavazi Market offers a wide range of clothing and accessories for men, women, and kids in Kenya. Discover new arrivals and best sellers." />
+            <Textarea id="site-description" defaultValue="Mavazi Market offers a wide range of clothing and accessories for men, women, and kids in Kenya. Discover new arrivals and best sellers." disabled={isSaving} />
           </div>
         </CardContent>
       </Card>
@@ -40,15 +58,15 @@ export default function AdminSettingsPage() {
         <CardContent className="space-y-4">
            <div>
             <Label htmlFor="contact-email">Public Email</Label>
-            <Input id="contact-email" type="email" defaultValue="support@mavazimarket.co.ke" />
+            <Input id="contact-email" type="email" defaultValue="support@mavazimarket.co.ke" disabled={isSaving} />
           </div>
           <div>
             <Label htmlFor="contact-phone">Public Phone Number</Label>
-            <Input id="contact-phone" type="tel" defaultValue="+254 700 123 456" />
+            <Input id="contact-phone" type="tel" defaultValue="+254 700 123 456" disabled={isSaving} />
           </div>
           <div>
             <Label htmlFor="store-address">Store Address</Label>
-            <Input id="store-address" defaultValue="123 Mavazi Towers, Biashara Street, Nairobi, Kenya" />
+            <Input id="store-address" defaultValue="123 Mavazi Towers, Biashara Street, Nairobi, Kenya" disabled={isSaving} />
           </div>
         </CardContent>
       </Card>
@@ -64,8 +82,13 @@ export default function AdminSettingsPage() {
       </Card>
       
       <div className="flex justify-end pt-4">
-        <Button className="bg-primary hover:bg-primary/90 text-primary-foreground">
-          <Save size={18} className="mr-2" /> Save All Settings
+        <Button 
+          className="bg-primary hover:bg-primary/90 text-primary-foreground" 
+          onClick={handleSaveSettings}
+          disabled={isSaving}
+        >
+          {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isSaving ? "Saving..." : <><Save size={18} className="mr-2" /> Save All Settings</>}
         </Button>
       </div>
     </div>

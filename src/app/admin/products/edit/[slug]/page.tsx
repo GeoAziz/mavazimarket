@@ -7,21 +7,33 @@ import * as z from "zod";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+// Label import removed as FormLabel used from form component
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Edit3, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Save, Trash2 } from 'lucide-react';
+import { Edit3, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Save, Trash2, Loader2 } from 'lucide-react';
 import Link from "next/link";
-import { mockProducts } from '@/lib/mock-data'; // For fetching mock product data
-import { useEffect, use } from "react"; 
+import { mockProducts } from '@/lib/mock-data'; 
+import { useEffect, use, useState } from "react"; 
+import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+
 
 interface EditProductPageProps {
   params: { slug: string }; 
 }
 
-// Same schema as add product page, but with defaults for all fields
 const productFormSchema = z.object({
   name: z.string().min(3, "Product name must be at least 3 characters.").default(""),
   description: z.string().min(10, "Description must be at least 10 characters.").default(""),
@@ -42,17 +54,18 @@ const productFormSchema = z.object({
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
 export default function AdminEditProductPage({ params: paramsFromProps }: EditProductPageProps) {
-  // Directly access .slug after unwrapping with use()
-  const slug = use(paramsFromProps).slug;
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   
+  const slug = use(paramsFromProps).slug;
   const productToEdit = mockProducts.find(p => p.slug === slug);
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
-    // Default values are now set in the Zod schema itself, or by useEffect for existing products
   });
-
-  useEffect(() => {
+  
+  const resetFormWithProductData = () => {
     if (productToEdit) {
       form.reset({
         name: productToEdit.name || '',
@@ -61,29 +74,52 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
         category: productToEdit.category || '',
         subcategory: productToEdit.subcategory || '',
         stockQuantity: productToEdit.stockQuantity,
-        sku: productToEdit.id || '', // Using id as SKU for mock
+        sku: productToEdit.id || '', 
         brand: productToEdit.brand || '',
         material: productToEdit.material || '',
         images: productToEdit.images?.join(',') || '',
         sizes: productToEdit.sizes?.join(',') || '',
         colors: productToEdit.colors?.join(',') || '',
         tags: productToEdit.tags?.join(',') || '',
-        isPublished: productToEdit.stockQuantity > 0, // Example logic
+        isPublished: productToEdit.stockQuantity > 0,
       });
     } else if (slug) {
-      // If productToEdit is not found but slug exists, reset with defaults (mostly empty strings from schema)
-      // This handles the case where a product is not found, preventing stale form data
-      form.reset(productFormSchema.parse({})); // Reset with schema defaults
+      form.reset(productFormSchema.parse({})); 
     }
+  }
+
+  useEffect(() => {
+    resetFormWithProductData();
   }, [productToEdit, form, slug]); 
 
 
-  function onSubmit(data: ProductFormValues) {
+  async function onSubmit(data: ProductFormValues) {
+    setIsSaving(true);
     console.log("Updated product data for slug", slug, ":", data);
-    alert("Product updated successfully! (Mock)");
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    toast({
+      title: "Product Updated!",
+      description: `${data.name} has been successfully updated.`,
+    });
+    setIsSaving(false);
   }
 
-  if (!slug && typeof slug !== 'string') { // Check if slug is still resolving (though `use` should handle suspension)
+  async function handleDeleteProduct() {
+    setIsDeleting(true);
+    console.log("Deleting product with slug:", slug);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    toast({
+      title: "Product Deleted",
+      description: `Product ${productToEdit?.name || slug} has been deleted (mock).`,
+      variant: "destructive",
+    });
+    setIsDeleting(false);
+    // router.push('/admin/products'); // Example redirect
+  }
+
+  if (!slug && typeof slug !== 'string') { 
     return <div>Loading product identifier...</div>;
   }
   
@@ -111,7 +147,6 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
            <div className="grid lg:grid-cols-3 gap-8 items-start">
-            {/* Main Product Information Column */}
             <div className="lg:col-span-2 space-y-6">
               <Card className="shadow-md">
                 <CardHeader>
@@ -121,14 +156,14 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                   <FormField control={form.control} name="name" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Product Name</FormLabel>
-                      <FormControl><Input placeholder="e.g. Men's Premium Cotton T-Shirt" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g. Men's Premium Cotton T-Shirt" {...field} disabled={isSaving || isDeleting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="description" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Description</FormLabel>
-                      <FormControl><Textarea placeholder="Detailed product description..." {...field} rows={5} /></FormControl>
+                      <FormControl><Textarea placeholder="Detailed product description..." {...field} rows={5} disabled={isSaving || isDeleting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -141,7 +176,7 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                     <FormField control={form.control} name="images" render={({ field }) => (
                         <FormItem>
                         <FormLabel>Image URLs (comma-separated)</FormLabel>
-                        <FormControl><Textarea placeholder="https://placehold.co/600x800.png" {...field} rows={2}/></FormControl>
+                        <FormControl><Textarea placeholder="https://placehold.co/600x800.png" {...field} rows={2} disabled={isSaving || isDeleting}/></FormControl>
                         <FormMessage />
                         </FormItem>
                     )} />
@@ -154,21 +189,21 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                    <FormField control={form.control} name="price" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Price (KSh)</FormLabel>
-                      <FormControl><Input type="number" {...field} /></FormControl>
+                      <FormControl><Input type="number" {...field} disabled={isSaving || isDeleting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="stockQuantity" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Stock Quantity</FormLabel>
-                      <FormControl><Input type="number" {...field} /></FormControl>
+                      <FormControl><Input type="number" {...field} disabled={isSaving || isDeleting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                    <FormField control={form.control} name="sku" render={({ field }) => (
                     <FormItem>
                       <FormLabel>SKU (Read-only for mock)</FormLabel>
-                      <FormControl><Input {...field} readOnly /></FormControl> {/* Assuming SKU (product.id) is read-only */}
+                      <FormControl><Input {...field} readOnly disabled={isSaving || isDeleting} /></FormControl> 
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -180,17 +215,16 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                 <CardContent className="space-y-4">
                     <FormField control={form.control} name="sizes" render={({ field }) => (
                         <FormItem><FormLabel className="flex items-center"><Ruler className="mr-2 text-primary/80"/>Sizes (comma-separated)</FormLabel>
-                        <FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormControl><Input {...field} disabled={isSaving || isDeleting} /></FormControl><FormMessage /></FormItem>
                     )} />
                      <FormField control={form.control} name="colors" render={({ field }) => (
                         <FormItem><FormLabel className="flex items-center"><Palette className="mr-2 text-primary/80"/>Colors (comma-separated)</FormLabel>
-                        <FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormControl><Input {...field} disabled={isSaving || isDeleting} /></FormControl><FormMessage /></FormItem>
                     )} />
                 </CardContent>
               </Card>
             </div>
 
-            {/* Sidebar Column for Organization, etc. */}
             <div className="lg:col-span-1 space-y-6">
               <Card className="shadow-md">
                 <CardHeader><CardTitle className="flex items-center"><Layers className="mr-2 text-primary/80"/>Organization</CardTitle></CardHeader>
@@ -198,7 +232,7 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                   <FormField control={form.control} name="category" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                       <Select onValueChange={field.onChange} value={field.value || ""}>
+                       <Select onValueChange={field.onChange} value={field.value || ""} disabled={isSaving || isDeleting}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="men">Men</SelectItem>
@@ -213,21 +247,21 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                    <FormField control={form.control} name="subcategory" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Subcategory</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl><Input {...field} disabled={isSaving || isDeleting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                    <FormField control={form.control} name="brand" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Brand</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl><Input {...field} disabled={isSaving || isDeleting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                    <FormField control={form.control} name="material" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Material</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl><Input {...field} disabled={isSaving || isDeleting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -238,14 +272,14 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
                  <CardContent className="space-y-4">
                     <FormField control={form.control} name="tags" render={({ field }) => (
                         <FormItem><FormLabel>Tags (comma-separated)</FormLabel>
-                        <FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormControl><Input {...field} disabled={isSaving || isDeleting} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="isPublished" render={({ field }) => (
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
                             <div className="space-y-0.5">
                                 <FormLabel>Publish Product</FormLabel>
                             </div>
-                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSaving || isDeleting} /></FormControl>
                         </FormItem>
                     )} />
                  </CardContent>
@@ -254,30 +288,37 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
           </div>
           
           <div className="flex justify-between items-center pt-4">
-            <Button type="button" variant="destructive">
-              <Trash2 size={18} className="mr-2" /> Delete Product
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button type="button" variant="destructive" disabled={isSaving || isDeleting}>
+                  {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 size={18} className="mr-2" />}
+                  {isDeleting ? "Deleting..." : "Delete Product"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete the product
+                    "{productToEdit.name}".
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteProduct} className="bg-destructive hover:bg-destructive/90">
+                    Yes, delete product
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             <div className="space-x-2">
-                <Button type="button" variant="outline" onClick={() => productToEdit && form.reset({ // Ensure productToEdit exists before resetting
-                    name: productToEdit.name || '',
-                    description: productToEdit.description || '',
-                    price: productToEdit.price,
-                    category: productToEdit.category || '',
-                    subcategory: productToEdit.subcategory || '',
-                    stockQuantity: productToEdit.stockQuantity,
-                    sku: productToEdit.id || '',
-                    brand: productToEdit.brand || '',
-                    material: productToEdit.material || '',
-                    images: productToEdit.images?.join(',') || '',
-                    sizes: productToEdit.sizes?.join(',') || '',
-                    colors: productToEdit.colors?.join(',') || '',
-                    tags: productToEdit.tags?.join(',') || '',
-                    isPublished: productToEdit.stockQuantity > 0,
-                })}>
+                <Button type="button" variant="outline" onClick={resetFormWithProductData} disabled={isSaving || isDeleting}>
                 Reset Changes
                 </Button>
-                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                <Save size={18} className="mr-2" /> Save Changes
+                <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSaving || isDeleting}>
+                 {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                 {isSaving ? "Saving..." : <><Save size={18} className="mr-2" /> Save Changes</>}
                 </Button>
             </div>
           </div>
@@ -286,4 +327,3 @@ export default function AdminEditProductPage({ params: paramsFromProps }: EditPr
     </div>
   );
 }
-

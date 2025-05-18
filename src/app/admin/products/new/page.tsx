@@ -7,34 +7,39 @@ import * as z from "zod";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+// Label import removed as FormLabel is used
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { PlusCircle, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers } from 'lucide-react';
+import { PlusCircle, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Loader2 } from 'lucide-react';
 import Link from "next/link";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 const productFormSchema = z.object({
   name: z.string().min(3, "Product name must be at least 3 characters."),
   description: z.string().min(10, "Description must be at least 10 characters."),
   price: z.coerce.number().positive("Price must be a positive number."),
   category: z.string().min(1, "Category is required."),
-  subcategory: z.string().optional(),
-  stockQuantity: z.coerce.number().int().min(0, "Stock can't be negative."),
-  sku: z.string().optional(),
-  brand: z.string().optional(),
-  material: z.string().optional(),
-  images: z.string().optional().describe("Comma-separated image URLs"),
-  sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)"),
-  colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)"),
-  tags: z.string().optional().describe("Comma-separated tags (e.g., new-arrival,best-seller)"),
+  subcategory: z.string().optional().default(""),
+  stockQuantity: z.coerce.number().int().min(0, "Stock can't be negative.").default(0),
+  sku: z.string().optional().default(""),
+  brand: z.string().optional().default(""),
+  material: z.string().optional().default(""),
+  images: z.string().optional().describe("Comma-separated image URLs").default(""),
+  sizes: z.string().optional().describe("Comma-separated sizes (e.g., S,M,L)").default(""),
+  colors: z.string().optional().describe("Comma-separated colors (e.g., Red,Blue)").default(""),
+  tags: z.string().optional().describe("Comma-separated tags (e.g., new-arrival,best-seller)").default(""),
   isPublished: z.boolean().default(true),
 });
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
 
 export default function AdminAddProductPage() {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema),
     defaultValues: {
@@ -55,10 +60,19 @@ export default function AdminAddProductPage() {
     },
   });
 
-  function onSubmit(data: ProductFormValues) {
+  async function onSubmit(data: ProductFormValues) {
+    setIsSubmitting(true);
     console.log("New product data:", data);
-    alert("Product created successfully! (Mock)");
-    // Redirect or clear form
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast({
+      title: "Product Created!",
+      description: `${data.name} has been successfully created.`,
+      variant: "default",
+    });
+    form.reset(); // Reset form after successful submission
+    setIsSubmitting(false);
   }
 
   return (
@@ -85,14 +99,14 @@ export default function AdminAddProductPage() {
                   <FormField control={form.control} name="name" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Product Name</FormLabel>
-                      <FormControl><Input placeholder="e.g. Men's Premium Cotton T-Shirt" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g. Men's Premium Cotton T-Shirt" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="description" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Description</FormLabel>
-                      <FormControl><Textarea placeholder="Detailed product description..." {...field} rows={5} /></FormControl>
+                      <FormControl><Textarea placeholder="Detailed product description..." {...field} rows={5} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -105,7 +119,7 @@ export default function AdminAddProductPage() {
                     <FormField control={form.control} name="images" render={({ field }) => (
                         <FormItem>
                         <FormLabel>Image URLs (comma-separated)</FormLabel>
-                        <FormControl><Textarea placeholder="https://placehold.co/600x800.png, https://placehold.co/600x800.png" {...field} rows={2}/></FormControl>
+                        <FormControl><Textarea placeholder="https://placehold.co/600x800.png, https://placehold.co/600x800.png" {...field} rows={2} disabled={isSubmitting}/></FormControl>
                         <FormMessage />
                         </FormItem>
                     )} />
@@ -119,21 +133,21 @@ export default function AdminAddProductPage() {
                    <FormField control={form.control} name="price" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Price (KSh)</FormLabel>
-                      <FormControl><Input type="number" placeholder="e.g. 1200" {...field} /></FormControl>
+                      <FormControl><Input type="number" placeholder="e.g. 1200" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={form.control} name="stockQuantity" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Stock Quantity</FormLabel>
-                      <FormControl><Input type="number" placeholder="e.g. 50" {...field} /></FormControl>
+                      <FormControl><Input type="number" placeholder="e.g. 50" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                    <FormField control={form.control} name="sku" render={({ field }) => (
                     <FormItem>
                       <FormLabel>SKU (Optional)</FormLabel>
-                      <FormControl><Input placeholder="e.g. MAV-TSH-BLK-M" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g. MAV-TSH-BLK-M" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -145,11 +159,11 @@ export default function AdminAddProductPage() {
                 <CardContent className="space-y-4">
                     <FormField control={form.control} name="sizes" render={({ field }) => (
                         <FormItem><FormLabel className="flex items-center"><Ruler className="mr-2 text-primary/80"/>Sizes (comma-separated)</FormLabel>
-                        <FormControl><Input placeholder="e.g. S,M,L,XL" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormControl><Input placeholder="e.g. S,M,L,XL" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
                     )} />
                      <FormField control={form.control} name="colors" render={({ field }) => (
                         <FormItem><FormLabel className="flex items-center"><Palette className="mr-2 text-primary/80"/>Colors (comma-separated)</FormLabel>
-                        <FormControl><Input placeholder="e.g. Black,White,Navy" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormControl><Input placeholder="e.g. Black,White,Navy" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
                     )} />
                 </CardContent>
               </Card>
@@ -163,7 +177,7 @@ export default function AdminAddProductPage() {
                   <FormField control={form.control} name="category" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category</FormLabel>
-                       <Select onValueChange={field.onChange} defaultValue={field.value}>
+                       <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isSubmitting}>
                         <FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl>
                         <SelectContent>
                           <SelectItem value="men">Men</SelectItem>
@@ -178,21 +192,21 @@ export default function AdminAddProductPage() {
                    <FormField control={form.control} name="subcategory" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Subcategory (Optional)</FormLabel>
-                      <FormControl><Input placeholder="e.g. T-Shirts" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g. T-Shirts" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                    <FormField control={form.control} name="brand" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Brand (Optional)</FormLabel>
-                      <FormControl><Input placeholder="e.g. Mavazi Basics" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g. Mavazi Basics" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                    <FormField control={form.control} name="material" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Material (Optional)</FormLabel>
-                      <FormControl><Input placeholder="e.g. Cotton" {...field} /></FormControl>
+                      <FormControl><Input placeholder="e.g. Cotton" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
@@ -203,7 +217,7 @@ export default function AdminAddProductPage() {
                  <CardContent className="space-y-4">
                     <FormField control={form.control} name="tags" render={({ field }) => (
                         <FormItem><FormLabel>Tags (comma-separated)</FormLabel>
-                        <FormControl><Input placeholder="e.g. new-arrival, best-seller, sale" {...field} /></FormControl><FormMessage /></FormItem>
+                        <FormControl><Input placeholder="e.g. new-arrival, best-seller, sale" {...field} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
                     )} />
                     <FormField control={form.control} name="isPublished" render={({ field }) => (
                         <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
@@ -211,7 +225,7 @@ export default function AdminAddProductPage() {
                                 <FormLabel>Publish Product</FormLabel>
                                 <CardDescription className="text-xs">Make this product visible on the storefront.</CardDescription>
                             </div>
-                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} /></FormControl>
                         </FormItem>
                     )} />
                  </CardContent>
@@ -220,9 +234,10 @@ export default function AdminAddProductPage() {
           </div>
           
           <div className="flex justify-end space-x-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => form.reset()}>Clear Form</Button>
-            <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-              <PlusCircle size={18} className="mr-2" /> Create Product
+            <Button type="button" variant="outline" onClick={() => form.reset()} disabled={isSubmitting}>Clear Form</Button>
+            <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isSubmitting ? "Creating..." : <><PlusCircle size={18} className="mr-2" /> Create Product</>}
             </Button>
           </div>
         </form>

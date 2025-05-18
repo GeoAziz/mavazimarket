@@ -5,18 +5,17 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import * as z from "zod";
 import Image from 'next/image';
+import Link from 'next/link';
 import { mockUser, mockOrders, mockProducts } from '@/lib/mock-data';
 import type { Order, Product } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-// Label import was unused, removed
-// import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
-import { Edit3, History, Heart, Settings, LogOut, ShoppingBag, Package, MapPin, Mail, KeyRound, Bell } from 'lucide-react';
+import { Edit3, History, Heart, Settings, LogOut, ShoppingBag, Package, MapPin, Mail, KeyRound, Bell, ShoppingCart as ShoppingCartIcon } from 'lucide-react';
 import { ProductCard } from '@/components/products/ProductCard';
 import {
   Form,
@@ -26,11 +25,8 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-// Alert, AlertDescription, AlertTitle were unused, removed
-// import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useState } from 'react'; // For QuickViewModal state
-import { QuickViewModal } from '@/components/products/QuickViewModal'; // Import QuickViewModal
-
+import { useState } from 'react'; 
+import { QuickViewModal } from '@/components/products/QuickViewModal'; 
 
 const profileFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
@@ -167,14 +163,25 @@ export default function ProfilePage() {
                           <CardFooter className="p-4 border-t">
                             <Button variant="outline" size="sm" className="mr-2">View Details</Button>
                             <Button variant="default" size="sm" className="bg-accent hover:bg-accent/90 text-accent-foreground">
-                              <ShoppingBag size={16} className="mr-2"/>Reorder
+                              <ShoppingCartIcon size={16} className="mr-2"/>Reorder
                             </Button>
                           </CardFooter>
                         </Card>
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground">You have no past orders.</p>
+                    <Card className="text-center py-12 shadow-none border-dashed">
+                      <CardHeader className="items-center">
+                        <History size={48} className="text-muted-foreground mb-4" />
+                        <CardTitle className="text-2xl font-semibold">No Orders Yet</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-muted-foreground mb-6">You haven't placed any orders with us. <br/>When you do, they'll appear here.</p>
+                        <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                          <Link href="/">Start Shopping</Link>
+                        </Button>
+                      </CardContent>
+                    </Card>
                   )}
                 </TabsContent>
 
@@ -187,14 +194,24 @@ export default function ProfilePage() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-muted-foreground">Your wishlist is empty. Start adding your favorite items!</p>
+                     <Card className="text-center py-12 shadow-none border-dashed">
+                      <CardHeader className="items-center">
+                        <Heart size={48} className="text-muted-foreground mb-4" />
+                        <CardTitle className="text-2xl font-semibold">Your Wishlist is Empty</CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-muted-foreground mb-6">Looks like you haven't added any items to your wishlist yet. <br/>Start browsing and save your favorites!</p>
+                        <Button asChild className="bg-primary hover:bg-primary/90 text-primary-foreground">
+                          <Link href="/">Browse Products</Link>
+                        </Button>
+                      </CardContent>
+                    </Card>
                   )}
                 </TabsContent>
 
                 <TabsContent value="settings">
                   <h2 className="text-xl font-semibold mb-6 flex items-center"><Settings size={22} className="mr-2 text-primary"/>Account Settings</h2>
                   <div className="space-y-8">
-                    {/* Profile Information Form */}
                     <Card>
                       <CardHeader><CardTitle className="flex items-center"><Mail size={20} className="mr-2 text-accent"/>Personal Information</CardTitle></CardHeader>
                       <CardContent>
@@ -222,7 +239,6 @@ export default function ProfilePage() {
                       </CardContent>
                     </Card>
 
-                    {/* Shipping Address Form */}
                     <Card>
                        <CardHeader><CardTitle className="flex items-center"><MapPin size={20} className="mr-2 text-accent"/>Shipping Address</CardTitle></CardHeader>
                       <CardContent>
@@ -268,7 +284,6 @@ export default function ProfilePage() {
                       </CardContent>
                     </Card>
                     
-                    {/* Change Password Form */}
                     <Card>
                       <CardHeader><CardTitle className="flex items-center"><KeyRound size={20} className="mr-2 text-accent"/>Change Password</CardTitle></CardHeader>
                       <CardContent>
@@ -304,16 +319,15 @@ export default function ProfilePage() {
                       </CardContent>
                     </Card>
 
-                    {/* Email Preferences - Placeholder UI */}
                     <Card>
                        <CardHeader><CardTitle className="flex items-center"><Bell size={20} className="mr-2 text-accent"/>Email Preferences</CardTitle></CardHeader>
                        <CardContent className="space-y-3">
                           <div className="flex items-center justify-between">
-                             <FormLabel htmlFor="promo-emails" className="flex-1">Receive promotional emails</FormLabel>
+                             <FormLabel htmlFor="promo-emails" className="flex-1 cursor-pointer">Receive promotional emails</FormLabel>
                              <Input type="checkbox" id="promo-emails" className="h-5 w-5"/>
                           </div>
                           <div className="flex items-center justify-between">
-                             <FormLabel htmlFor="order-updates" className="flex-1">Receive order updates</FormLabel>
+                             <FormLabel htmlFor="order-updates" className="flex-1 cursor-pointer">Receive order updates</FormLabel>
                              <Input type="checkbox" id="order-updates" defaultChecked className="h-5 w-5"/>
                           </div>
                            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground mt-2">Save Preferences</Button>

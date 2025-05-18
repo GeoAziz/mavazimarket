@@ -10,7 +10,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Mail, KeyRound } from 'lucide-react';
+import { Mail, KeyRound, Loader2 } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 const forgotPasswordFormSchema = z.object({
   email: z.string().email("Invalid email address."),
@@ -18,15 +20,27 @@ const forgotPasswordFormSchema = z.object({
 type ForgotPasswordFormValues = z.infer<typeof forgotPasswordFormSchema>;
 
 export default function ForgotPasswordPage() {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<ForgotPasswordFormValues>({
     resolver: zodResolver(forgotPasswordFormSchema),
     defaultValues: { email: "" },
   });
 
-  function onSubmit(data: ForgotPasswordFormValues) {
+  async function onSubmit(data: ForgotPasswordFormValues) {
+    setIsSubmitting(true);
     console.log("Forgot password request:", data);
-    alert("If an account with this email exists, a password reset link has been sent. (Mock)");
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast({
+      title: "Password Reset Link Sent",
+      description: "If an account with this email exists, a password reset link has been sent.",
+      variant: "default",
+    });
     form.reset();
+    setIsSubmitting(false);
   }
 
   return (
@@ -46,13 +60,14 @@ export default function ForgotPasswordPage() {
                 <FormField control={form.control} name="email" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><Mail size={16} className="mr-2 text-muted-foreground"/>Email Address</FormLabel>
-                      <FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl>
+                      <FormControl><Input type="email" placeholder="you@example.com" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Sending..." : "Send Reset Link"}
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmitting ? "Sending..." : "Send Reset Link"}
                 </Button>
               </form>
             </Form>

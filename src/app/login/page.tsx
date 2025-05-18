@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -9,7 +10,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { LogIn, KeyRound, Mail } from 'lucide-react';
+import { LogIn, KeyRound, Mail, Loader2 } from 'lucide-react';
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
+// import { useRouter } from 'next/navigation'; // Uncomment if you want to redirect
 
 const loginFormSchema = z.object({
   email: z.string().email("Invalid email address."),
@@ -18,20 +22,33 @@ const loginFormSchema = z.object({
 type LoginFormValues = z.infer<typeof loginFormSchema>;
 
 export default function LoginPage() {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // const router = useRouter(); // Uncomment if you want to redirect
+
   const form = useForm<LoginFormValues>({
     resolver: zodResolver(loginFormSchema),
     defaultValues: { email: "", password: "" },
   });
 
-  function onSubmit(data: LoginFormValues) {
+  async function onSubmit(data: LoginFormValues) {
+    setIsSubmitting(true);
     console.log("Login attempt:", data);
-    // Handle login logic here
-    alert("Login successful! (Mock - Redirecting to profile...)");
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    toast({
+      title: "Login Successful!",
+      description: "Welcome back! Redirecting you now...",
+      variant: "default",
+    });
     // router.push('/profile'); // Example redirect
+    setIsSubmitting(false);
+    // form.reset(); // Optionally reset form if not redirecting
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] py-10"> {/* Adjust min-h as needed */}
+    <div className="flex flex-col items-center justify-center min-h-[calc(100vh-200px)] py-10">
       <div className="w-full max-w-md">
         <Breadcrumbs items={[{ label: 'Login' }]} className="mb-4 justify-center" />
         
@@ -47,7 +64,7 @@ export default function LoginPage() {
                 <FormField control={form.control} name="email" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><Mail size={16} className="mr-2 text-muted-foreground"/>Email Address</FormLabel>
-                      <FormControl><Input type="email" placeholder="you@example.com" {...field} /></FormControl>
+                      <FormControl><Input type="email" placeholder="you@example.com" {...field} disabled={isSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -55,7 +72,7 @@ export default function LoginPage() {
                 <FormField control={form.control} name="password" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="flex items-center"><KeyRound size={16} className="mr-2 text-muted-foreground"/>Password</FormLabel>
-                      <FormControl><Input type="password" placeholder="••••••••" {...field} /></FormControl>
+                      <FormControl><Input type="password" placeholder="••••••••" {...field} disabled={isSubmitting} /></FormControl>
                        <div className="text-right">
                         <Button variant="link" size="sm" asChild className="p-0 h-auto text-xs text-accent hover:underline">
                           <Link href="/forgot-password">Forgot password?</Link>
@@ -65,8 +82,9 @@ export default function LoginPage() {
                     </FormItem>
                   )}
                 />
-                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={form.formState.isSubmitting}>
-                  {form.formState.isSubmitting ? "Signing In..." : "Sign In"}
+                <Button type="submit" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmitting ? "Signing In..." : "Sign In"}
                 </Button>
               </form>
             </Form>

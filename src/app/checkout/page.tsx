@@ -1,3 +1,4 @@
+
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,14 +15,16 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Label } from "@/components/ui/label";
+// Label import was already removed as unused
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
 import { mockCartItems, mockUser } from '@/lib/mock-data';
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { CreditCard, ShoppingBag, AlertTriangle } from "lucide-react";
-import { Alert, AlertDescription } from "@/components/ui/alert"; // Removed AlertTitle as it's not used
+import { CreditCard, ShoppingBag, AlertTriangle, Loader2 } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 // M-Pesa icon (simple SVG)
 const MPesaIcon = () => (
@@ -48,12 +51,15 @@ const checkoutFormSchema = z.object({
 type CheckoutFormValues = z.infer<typeof checkoutFormSchema>;
 
 export default function CheckoutPage() {
+  const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
     defaultValues: {
       fullName: mockUser.name || "",
       email: mockUser.email || "",
-      phone: "", // Example: start with Kenyan prefix if desired +254
+      phone: "", 
       address: mockUser.shippingAddress?.street || "",
       city: mockUser.shippingAddress?.city || "",
       postalCode: mockUser.shippingAddress?.postalCode || "",
@@ -61,10 +67,20 @@ export default function CheckoutPage() {
     },
   });
 
-  function onSubmit(data: CheckoutFormValues) {
+  async function onSubmit(data: CheckoutFormValues) {
+    setIsSubmitting(true);
     console.log("Checkout data:", data);
-    // Handle order placement logic here
-    alert("Order placed successfully! (Mock)" + "\nPayment Method: " + data.paymentMethod);
+    // Simulate API call
+    await new Promise(resolve => setTimeout(resolve, 2000)); 
+    
+    toast({
+      title: "Order Placed Successfully!",
+      description: `Payment Method: ${data.paymentMethod}. We'll process your order shortly.`,
+      variant: "default",
+    });
+    // form.reset(); // Optionally reset form or redirect
+    setIsSubmitting(false);
+    // router.push('/order-confirmation'); // Example redirect
   }
 
   const subtotal = mockCartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -97,7 +113,7 @@ export default function CheckoutPage() {
                       <FormItem>
                         <FormLabel>Full Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. Juma Otieno" {...field} />
+                          <Input placeholder="e.g. Juma Otieno" {...field} disabled={isSubmitting} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -110,7 +126,7 @@ export default function CheckoutPage() {
                       <FormItem>
                         <FormLabel>Email Address</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="you@example.com" {...field} />
+                          <Input type="email" placeholder="you@example.com" {...field} disabled={isSubmitting} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -124,7 +140,7 @@ export default function CheckoutPage() {
                     <FormItem className="mt-4">
                       <FormLabel>Phone Number (M-Pesa)</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. +254712345678" {...field} />
+                        <Input placeholder="e.g. +254712345678" {...field} disabled={isSubmitting} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -143,7 +159,7 @@ export default function CheckoutPage() {
                     <FormItem>
                       <FormLabel>Street Address</FormLabel>
                       <FormControl>
-                        <Input placeholder="e.g. Lunga Lunga Rd, House No. 10" {...field} />
+                        <Input placeholder="e.g. Lunga Lunga Rd, House No. 10" {...field} disabled={isSubmitting} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
@@ -157,7 +173,7 @@ export default function CheckoutPage() {
                       <FormItem>
                         <FormLabel>City/Town</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. Nairobi" {...field} />
+                          <Input placeholder="e.g. Nairobi" {...field} disabled={isSubmitting} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -170,7 +186,7 @@ export default function CheckoutPage() {
                       <FormItem>
                         <FormLabel>Postal Code (Optional)</FormLabel>
                         <FormControl>
-                          <Input placeholder="e.g. 00100" {...field} />
+                          <Input placeholder="e.g. 00100" {...field} disabled={isSubmitting} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -193,26 +209,26 @@ export default function CheckoutPage() {
                           onValueChange={field.onChange}
                           defaultValue={field.value}
                           className="flex flex-col space-y-2"
+                          disabled={isSubmitting}
                         >
                           <FormItem className="flex items-center space-x-3 space-y-0 p-3 border rounded-md has-[:checked]:bg-accent/10 has-[:checked]:border-accent transition-all">
                             <FormControl>
-                              <RadioGroupItem value="mpesa" />
+                              <RadioGroupItem value="mpesa" disabled={isSubmitting} />
                             </FormControl>
                             <MPesaIcon />
                             <FormLabel className="font-medium cursor-pointer flex-1">M-Pesa</FormLabel>
                           </FormItem>
                           <FormItem className="flex items-center space-x-3 space-y-0 p-3 border rounded-md has-[:checked]:bg-accent/10 has-[:checked]:border-accent transition-all">
                             <FormControl>
-                              <RadioGroupItem value="card" />
+                              <RadioGroupItem value="card" disabled={isSubmitting} />
                             </FormControl>
                             <CreditCard className="h-5 w-5 mr-2 text-blue-600"/>
                             <FormLabel className="font-medium cursor-pointer flex-1">Credit/Debit Card</FormLabel>
                           </FormItem>
                            <FormItem className="flex items-center space-x-3 space-y-0 p-3 border rounded-md has-[:checked]:bg-accent/10 has-[:checked]:border-accent transition-all">
                             <FormControl>
-                              <RadioGroupItem value="paypal" />
+                              <RadioGroupItem value="paypal" disabled={isSubmitting} />
                             </FormControl>
-                            {/* Basic PayPal icon placeholder */}
                             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-700" viewBox="0 0 24 24" fill="currentColor"><path d="M8.332 21.084c.24.027.507.04.708.04.14 0 .28-.007.42-.02a.75.75 0 00.6-.874l-.663-4.047c-.068-.415.147-.818.54-.986l.002-.002c2.728-1.163 4.213-3.95 3.927-7.217-.21-2.396-1.898-4.295-4.188-4.828C7.765 3.813 6.29 4.092 5.05 5.16c-1.24 1.068-1.854 2.635-1.707 4.31.183 2.086 1.43 3.785 3.29 4.539l.112.045c.45.18.65.69.456 1.129l-.654 1.436c-.27.596.077 1.3.696 1.535l.003.001c.11.042.223.077.335.105l.001.001zm6.27-15.194c2.014.476 3.488 2.112 3.676 4.19.257 2.87-1.05 5.336-3.494 6.386l-.003.001c-.34.146-.74.013-.943-.317l.003.004-.74-1.623a.75.75 0 00-1.106-.393c-1.653.79-3.244.165-3.987-1.39-.742-1.553-.39-3.355.822-4.452 1.212-1.097 2.768-1.405 4.245-1.074.06.013.12.03.178.05l.003.001c.2.067.413.03.58-.093l.002-.002.956-.714a.75.75 0 00.01-.953z"/></svg>
                             <FormLabel className="font-medium cursor-pointer flex-1">PayPal</FormLabel>
                           </FormItem>
@@ -224,7 +240,7 @@ export default function CheckoutPage() {
                 />
                 {form.watch("paymentMethod") === "card" && (
                   <Alert variant="default" className="mt-4 bg-blue-50 border-blue-200 text-blue-700">
-                    <CreditCard className="h-4 w-4 !text-blue-700" /> {/* Ensure icon color override */}
+                    <CreditCard className="h-4 w-4 !text-blue-700" /> 
                     <AlertDescription>
                       Card payment details will be collected on the next step via a secure Stripe/Payment Gateway page.
                     </AlertDescription>
@@ -286,8 +302,11 @@ export default function CheckoutPage() {
               </div>
             </CardContent>
             <div className="p-6 pt-0">
-               <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
-                Place Order
+               <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+                {isSubmitting ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : null}
+                {isSubmitting ? "Placing Order..." : "Place Order"}
               </Button>
               <Alert variant="destructive" className="mt-4 text-xs">
                 <AlertTriangle className="h-4 w-4" />

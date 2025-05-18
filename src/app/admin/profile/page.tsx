@@ -9,8 +9,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from '@/components/ui/input';
-import { UserCircle, Edit3, KeyRound, Mail, Save } from 'lucide-react';
-import { mockUser } from '@/lib/mock-data'; // Using mockUser for placeholder
+import { UserCircle, Edit3, KeyRound, Mail, Save, Loader2 } from 'lucide-react';
+import { mockUser } from '@/lib/mock-data'; 
+import { useToast } from "@/hooks/use-toast";
+import { useState } from "react";
 
 const adminProfileFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
@@ -30,11 +32,14 @@ type AdminPasswordFormValues = z.infer<typeof adminPasswordFormSchema>;
 
 
 export default function AdminProfilePage() {
-  // Mock admin user data
+  const { toast } = useToast();
+  const [isProfileSubmitting, setIsProfileSubmitting] = useState(false);
+  const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+
   const adminUser = {
     name: "Admin User",
     email: "admin@mavazimarket.co.ke",
-    profilePictureUrl: mockUser.profilePictureUrl, // Reuse for placeholder
+    profilePictureUrl: mockUser.profilePictureUrl, 
     dataAiHint: "admin avatar"
   };
 
@@ -48,15 +53,21 @@ export default function AdminProfilePage() {
     defaultValues: { currentPassword: "", newPassword: "", confirmPassword: "" },
   });
 
-  function onProfileSubmit(data: AdminProfileFormValues) {
+  async function onProfileSubmit(data: AdminProfileFormValues) {
+    setIsProfileSubmitting(true);
     console.log("Admin profile update:", data);
-    alert("Admin profile updated (Mock)");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    toast({ title: "Profile Updated", description: "Your personal information has been saved." });
+    setIsProfileSubmitting(false);
   }
 
-  function onPasswordSubmit(data: AdminPasswordFormValues) {
+  async function onPasswordSubmit(data: AdminPasswordFormValues) {
+    setIsPasswordSubmitting(true);
     console.log("Admin password change:", data);
-    alert("Admin password changed (Mock)");
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    toast({ title: "Password Changed", description: "Your password has been updated successfully." });
     passwordForm.reset();
+    setIsPasswordSubmitting(false);
   }
 
   return (
@@ -66,7 +77,6 @@ export default function AdminProfilePage() {
       </h1>
 
       <div className="grid md:grid-cols-3 gap-6 items-start">
-        {/* Profile Card */}
         <Card className="md:col-span-1 shadow-lg">
           <CardHeader className="items-center text-center">
             <Avatar className="h-24 w-24 mb-3 border-2 border-primary">
@@ -81,7 +91,6 @@ export default function AdminProfilePage() {
           </CardHeader>
         </Card>
 
-        {/* Edit Profile and Password Forms */}
         <div className="md:col-span-2 space-y-6">
           <Card className="shadow-md">
             <CardHeader>
@@ -93,19 +102,20 @@ export default function AdminProfilePage() {
                   <FormField control={profileForm.control} name="name" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Full Name</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl><Input {...field} disabled={isProfileSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={profileForm.control} name="email" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Email Address</FormLabel>
-                      <FormControl><Input type="email" {...field} /></FormControl>
+                      <FormControl><Input type="email" {...field} disabled={isProfileSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
-                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                     <Save size={16} className="mr-2" /> Save Profile
+                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isProfileSubmitting}>
+                     {isProfileSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                     {isProfileSubmitting ? "Saving..." : <><Save size={16} className="mr-2" /> Save Profile</>}
                   </Button>
                 </form>
               </Form>
@@ -122,26 +132,27 @@ export default function AdminProfilePage() {
                   <FormField control={passwordForm.control} name="currentPassword" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Current Password</FormLabel>
-                      <FormControl><Input type="password" {...field} /></FormControl>
+                      <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={passwordForm.control} name="newPassword" render={({ field }) => (
                     <FormItem>
                       <FormLabel>New Password</FormLabel>
-                      <FormControl><Input type="password" {...field} /></FormControl>
+                      <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={passwordForm.control} name="confirmPassword" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Confirm New Password</FormLabel>
-                      <FormControl><Input type="password" {...field} /></FormControl>
+                      <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} /></FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
-                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                     <Save size={16} className="mr-2" /> Update Password
+                  <Button type="submit" className="bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isPasswordSubmitting}>
+                     {isPasswordSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                     {isPasswordSubmitting ? "Updating..." : <><Save size={16} className="mr-2" /> Update Password</>}
                   </Button>
                 </form>
               </Form>
