@@ -4,77 +4,63 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper function to check if user is admin via custom claims
-    function isAdmin() {
-      return request.auth.token.admin == true;
-    }
-
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-
-    // Helper function to check if user is the owner of the document
-    function isOwner(userId) {
-      return request.auth.uid == userId;
-    }
-
-    // Products: Publicly readable, Admin writable
+    // Products: Publicly readable, Admin write
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAdmin(); // Create, Update, Delete
-
-      // Reviews subcollection under products
+      allow write: if request.auth != null && request.auth.token.admin == true;
+      // Reviews subcollection
       match /reviews/{reviewId} {
         allow read: if true;
-        allow create: if isAuthenticated(); // Authenticated users can create reviews
-        allow update, delete: if isAuthenticated() && isOwner(request.resource.data.userId); // Users can update/delete their own reviews
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
       }
     }
 
-    // Categories: Publicly readable, Admin writable
+    // Categories: Publicly readable, Admin write
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if request.auth != null && request.auth.token.admin == true;
     }
 
-    // Users: User can read/write their own profile. Admin can read all.
+    // Users:
+    // User can create their own document.
+    // User can read and update their own document.
+    // Admins can read all user documents and update them.
     match /users/{userId} {
-      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
-      allow update: if isAuthenticated() && isOwner(userId); // Users can update their own profile
-      // Admin updates to user profiles (like role, disable) might need more specific rules or Cloud Functions
-      allow create: if isAuthenticated() && isOwner(userId); // Usually user doc is created on signup
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow read, update: if request.auth != null && (request.auth.uid == userId || request.auth.token.admin == true);
+      // allow delete: if request.auth != null && (request.auth.uid == userId || request.auth.token.admin == true); // Decide on delete policy
     }
 
-    // Orders: User can manage their own orders. Admin can read/update all.
+    // Orders: 
+    // User can create orders for themselves.
+    // User can read/update/delete their own orders.
+    // Admin can read/update/delete all orders.
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (isOwner(resource.data.userId) || isAdmin());
-      allow create: if isAuthenticated(); // Users create their own orders
-      allow update: if isAuthenticated() && isAdmin(); // Only admins can update order status, details etc.
-      // Users should not be able to delete their orders directly.
-      allow delete: if isAdmin();
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      allow read, update, delete: if request.auth != null && 
+                                     ( (resource.data.userId == request.auth.uid) || 
+                                       (request.auth.token.admin == true) 
+                                     );
     }
-
-    // Discounts: Placeholder - Authenticated can read, Admin write
-    // This collection is not yet implemented in the app UI
+    
+    // Discounts: Authenticated users read, Admin write (placeholder)
     match /discounts/{discountId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.admin == true;
     }
 
-    // Settings: Publicly readable for some settings, Admin write for all
-    // Assuming a single document 'general' for general site settings
-    // and 'theme' for theme settings
-    match /settings/{settingId} {
-      // Allow public read for 'general' settings (site name, etc.) and 'themeAppearance'
-      allow read: if settingId == 'general' || settingId == 'themeAppearance';
-      allow write: if isAdmin(); // Only admins can change any settings
+    // Settings: Public read for general, admin write
+    // The 'general' document holds all settings, including themeAppearance.
+    match /settings/general {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.admin == true;
     }
 
-    // Fallback: Deny all by default if not matched above
-    // This is important for security.
-    match /{document=**} {
-      allow read, write: if false;
+    // Fallback: Deny all other direct reads/writes to other paths not explicitly defined.
+    // This makes it more secure by default.
+    match /{path=**}/documents/{document} {
+        allow read, write: if false;
     }
   }
 }
