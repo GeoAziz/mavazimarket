@@ -12,7 +12,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyDFGVtLGvNXOPhgF6cXx4y9vYWg6ipeBEU",
   authDomain: "mavazi-market.firebaseapp.com",
   projectId: "mavazi-market",
-  storageBucket: "mavazi-market.appspot.com", // Corrected bucket name from provided config
+  storageBucket: "mavazi-market.firebasestorage.app", // Ensured this matches user-provided config
   messagingSenderId: "488811968016",
   appId: "1:488811968016:web:c1bf5ad48916de91acfc95"
 };
