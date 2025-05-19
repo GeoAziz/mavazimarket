@@ -27,9 +27,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className={'font-sans antialiased flex flex-col min-h-screen'}>
-        {/* CartProvider now wraps AuthProvider */}
-        <CartProvider>
-          <AuthProvider>
+        <AuthProvider> {/* AuthProvider is now the outer provider */}
+          <CartProvider> {/* CartProvider is nested inside AuthProvider */}
             <ThemeApplicator />
             <Header />
             <main className="flex-grow container mx-auto px-4 py-8">
@@ -37,8 +36,8 @@ export default function RootLayout({
             </main>
             <Footer />
             <Toaster />
-          </AuthProvider>
-        </CartProvider>
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );
