@@ -15,9 +15,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UserPlus, Mail, KeyRound, User as UserIcon, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { doc, setDoc } from "firebase/firestore";
+import { createUserWithEmailAndPassword, updateProfile as updateFirebaseAuthProfile } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import { handleUserSignupCompletion } from "./actions";
+
 
 const signupFormSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
@@ -47,31 +48,38 @@ export default function SignupPage() {
   async function onSubmit(data: SignupFormValues) {
     setIsSubmitting(true);
     try {
+      // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
 
-      // Update Firebase Auth profile
-      await updateProfile(user, { displayName: data.fullName });
+      // 2. Update Firebase Auth profile (displayName)
+      await updateFirebaseAuthProfile(user, { displayName: data.fullName });
 
-      // Create user document in Firestore
-      const userDocRef = doc(db, "users", user.uid);
-      await setDoc(userDocRef, {
-        id: user.uid,
-        name: data.fullName,
+      // 3. Call server action to create Firestore user doc and send welcome email
+      const signupCompletionResult = await handleUserSignupCompletion(user.uid, {
+        fullName: data.fullName,
         email: data.email,
-        createdAt: new Date().toISOString(),
-        wishlist: [], // Initialize empty wishlist
-        // Add other default fields as needed from your User type
       });
-      
-      toast({
-        title: "Account Created!",
-        description: "Welcome to Mavazi Market! You can now log in.",
-        variant: "default",
-      });
+
+      if (!signupCompletionResult.success) {
+        // Log the error, but the user is already created in Auth.
+        // This might need more robust handling like queuing the email or manual follow-up.
+        console.error("Error during signup completion (Firestore/Email):", signupCompletionResult.error);
+        toast({
+          title: "Account Created (with minor issue)",
+          description: "Welcome! There was a small issue sending your welcome email, but your account is active.",
+          variant: "default", // Still a success for login
+        });
+      } else {
+        toast({
+          title: "Account Created!",
+          description: "Welcome to Mavazi Market! A welcome email has been sent. You can now log in.",
+          variant: "default",
+        });
+      }
       router.push('/login');
     } catch (error: any) {
-      console.error("Signup error:", error);
+      console.error("Signup error (Firebase Auth):", error);
       let errorMessage = "Failed to create account. Please try again.";
       if (error.code === 'auth/email-already-in-use') {
         errorMessage = "This email address is already in use.";

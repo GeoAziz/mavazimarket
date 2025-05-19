@@ -15,18 +15,21 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-// Label import was already removed as unused
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
-import { mockCartItems, mockUser } from '@/lib/mock-data';
+import { mockCartItems, mockUser } from '@/lib/mock-data'; // mockUser for default values
 import Image from 'next/image';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreditCard, ShoppingBag, AlertTriangle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { placeOrderAction } from "./actions";
+import { useAuth } from "@/contexts/AuthContext";
+import type { CartItem } from '@/lib/types';
+import { useRouter } from "next/navigation";
 
-// M-Pesa icon (simple SVG)
+
 const MPesaIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" className="h-6 w-6 mr-2 text-green-600">
     <path d="M12 .5C5.649.5.5 5.649.5 12S5.649 23.5 12 23.5 23.5 18.351 23.5 12 18.351.5 12 .5zm0 21.5C6.757 22 2 17.243 2 12S6.757 2 12 2s10 4.757 10 10-4.757 10-10 10z"/>
@@ -52,41 +55,91 @@ type CheckoutFormValues = z.infer<typeof checkoutFormSchema>;
 
 export default function CheckoutPage() {
   const { toast } = useToast();
+  const router = useRouter();
+  const { currentUser, appUser } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cart, setCartItems] = useState<CartItem[]>(mockCartItems); // Placeholder for cart state
 
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
     defaultValues: {
-      fullName: mockUser.name || "",
-      email: mockUser.email || "",
+      fullName: "",
+      email: "",
       phone: "", 
-      address: mockUser.shippingAddress?.street || "",
-      city: mockUser.shippingAddress?.city || "",
-      postalCode: mockUser.shippingAddress?.postalCode || "",
+      address: "",
+      city: "",
+      postalCode: "",
       paymentMethod: "mpesa",
     },
   });
 
+  useEffect(() => {
+    // Pre-fill form if user is logged in and appUser data is available
+    if (appUser) {
+      form.reset({
+        fullName: appUser.name || "",
+        email: appUser.email || "",
+        phone: appUser.shippingAddress?.phone || "", // Assuming phone might be in shippingAddress
+        address: appUser.shippingAddress?.street || "",
+        city: appUser.shippingAddress?.city || "",
+        postalCode: appUser.shippingAddress?.postalCode || "",
+        paymentMethod: "mpesa", // Default payment method
+      });
+    } else if (currentUser) { // User is authenticated but appUser might still be loading or not found
+       form.reset({
+        fullName: currentUser.displayName || "",
+        email: currentUser.email || "",
+        phone: currentUser.phoneNumber || "",
+        paymentMethod: "mpesa",
+      });
+    }
+    // TODO: Implement fetching cart items from context or localStorage
+    // For now, using mockCartItems
+    setCartItems(mockCartItems); 
+  }, [appUser, currentUser, form]);
+
+
+  const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const taxes = subtotal * 0.16;
+  const shippingFee = subtotal > 3000 ? 0 : 250; // Example shipping logic
+  const total = subtotal + taxes + shippingFee;
+
+
   async function onSubmit(data: CheckoutFormValues) {
     setIsSubmitting(true);
-    console.log("Checkout data:", data);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000)); 
-    
-    toast({
-      title: "Order Placed Successfully!",
-      description: `Payment Method: ${data.paymentMethod}. We'll process your order shortly.`,
-      variant: "default",
+    if (cart.length === 0) {
+        toast({ title: "Empty Cart", description: "Your cart is empty. Please add items before checking out.", variant: "destructive"});
+        setIsSubmitting(false);
+        return;
+    }
+
+    const result = await placeOrderAction({
+      userId: currentUser ? currentUser.uid : null,
+      formData: data,
+      cartItems: cart,
+      totalAmount: total,
     });
-    // form.reset(); // Optionally reset form or redirect
+    
+    if (result.success && result.orderId) {
+      toast({
+        title: "Order Placed Successfully!",
+        description: `Order ID: #${result.orderId.substring(0,8)}. A confirmation email has been sent.`,
+        variant: "default",
+      });
+      // Clear cart (mock implementation for now)
+      setCartItems([]);
+      form.reset(); 
+      // router.push(`/order-confirmation/${result.orderId}`); // Optional redirect
+    } else {
+      toast({
+        title: "Order Placement Failed",
+        description: result.error || "An unknown error occurred. Please try again.",
+        variant: "destructive",
+      });
+    }
     setIsSubmitting(false);
-    // router.push('/order-confirmation'); // Example redirect
   }
 
-  const subtotal = mockCartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const taxes = subtotal * 0.16;
-  const shippingFee = subtotal > 3000 ? 0 : 250;
-  const total = subtotal + taxes + shippingFee;
 
   return (
     <div className="space-y-8">
@@ -266,20 +319,24 @@ export default function CheckoutPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <ul className="space-y-3 max-h-60 overflow-y-auto pr-2">
-                {mockCartItems.map(item => (
-                  <li key={item.id} className="flex justify-between items-start text-sm">
-                    <div className="flex items-start">
-                      <Image src={item.image} alt={item.name} width={48} height={64} className="rounded mr-3 object-cover" data-ai-hint="product clothing"/>
-                      <div>
-                        <p className="font-medium text-foreground">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">Qty: {item.quantity} {item.size ? `| Size: ${item.size}`: ''}</p>
+              {cart.length > 0 ? (
+                <ul className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                  {cart.map(item => (
+                    <li key={item.id} className="flex justify-between items-start text-sm">
+                      <div className="flex items-start">
+                        <Image src={item.image} alt={item.name} width={48} height={64} className="rounded mr-3 object-cover" data-ai-hint="product clothing"/>
+                        <div>
+                          <p className="font-medium text-foreground">{item.name}</p>
+                          <p className="text-xs text-muted-foreground">Qty: {item.quantity} {item.size ? `| Size: ${item.size}`: ''}</p>
+                        </div>
                       </div>
-                    </div>
-                    <span className="font-medium text-foreground">KSh {(item.price * item.quantity).toLocaleString()}</span>
-                  </li>
-                ))}
-              </ul>
+                      <span className="font-medium text-foreground">KSh {(item.price * item.quantity).toLocaleString()}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-muted-foreground text-center py-4">Your cart is empty.</p>
+              )}
               <Separator />
               <div className="space-y-1 text-sm">
                 <div className="flex justify-between">
@@ -302,7 +359,7 @@ export default function CheckoutPage() {
               </div>
             </CardContent>
             <div className="p-6 pt-0">
-               <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting}>
+               <Button type="submit" size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" disabled={isSubmitting || cart.length === 0}>
                 {isSubmitting ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 ) : null}

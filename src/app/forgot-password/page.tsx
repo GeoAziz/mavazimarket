@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Mail, KeyRound, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
+import { sendPasswordResetLinkAction } from "./actions";
 
 const forgotPasswordFormSchema = z.object({
   email: z.string().email("Invalid email address."),
@@ -30,16 +31,17 @@ export default function ForgotPasswordPage() {
 
   async function onSubmit(data: ForgotPasswordFormValues) {
     setIsSubmitting(true);
-    console.log("Forgot password request:", data);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
+    const result = await sendPasswordResetLinkAction(data);
     
     toast({
-      title: "Password Reset Link Sent",
-      description: "If an account with this email exists, a password reset link has been sent.",
-      variant: "default",
+      title: result.success ? "Password Reset Link Sent" : "Request Failed",
+      description: result.message,
+      variant: result.success ? "default" : "destructive",
     });
-    form.reset();
+
+    if (result.success) {
+      form.reset();
+    }
     setIsSubmitting(false);
   }
 
