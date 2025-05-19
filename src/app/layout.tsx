@@ -1,3 +1,4 @@
+
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
@@ -26,8 +27,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className={'font-sans antialiased flex flex-col min-h-screen'}>
-        <AuthProvider>
-          <CartProvider> {/* Wrap AuthProvider or children with CartProvider */}
+        <CartProvider> {/* CartProvider now wraps AuthProvider */}
+          <AuthProvider>
             <ThemeApplicator />
             <Header />
             <main className="flex-grow container mx-auto px-4 py-8">
@@ -35,8 +36,8 @@ export default function RootLayout({
             </main>
             <Footer />
             <Toaster />
-          </CartProvider>
-        </AuthProvider>
+          </AuthProvider>
+        </CartProvider>
       </body>
     </html>
   );
