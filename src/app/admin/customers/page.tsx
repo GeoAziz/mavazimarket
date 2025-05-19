@@ -14,15 +14,16 @@ import {
 } from '@/components/ui/table';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Users, Search, UserPlus, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Users, Search, UserPlus, ChevronLeft, ChevronRight, Loader2, ShieldCheck, UserCog } from 'lucide-react';
 import type { User } from '@/lib/types';
 import { useState, useMemo, useEffect } from 'react';
 import Link from 'next/link';
 import { collection, getDocs, query, orderBy, limit, startAfter, DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
-const ITEMS_PER_PAGE = 10; // For client-side pagination
+const ITEMS_PER_PAGE = 10;
 
 export default function AdminCustomersPage() {
   const [customers, setCustomers] = useState<User[]>([]);
@@ -31,30 +32,26 @@ export default function AdminCustomersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-
-  // For server-side infinite scroll (optional, current setup is client-side pagination)
-  // const [loadingMore, setLoadingMore] = useState(false);
-  // const [lastVisible, setLastVisible] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
-  // const [hasMore, setHasMore] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchCustomers = async () => {
       setLoading(true);
       try {
         const usersRef = collection(db, "users");
-        // Simple fetch all for now, can add server-side pagination later
-        const q = query(usersRef, orderBy("name")); // Assuming 'name' field exists for sorting
+        const q = query(usersRef, orderBy("name"));
         const querySnapshot = await getDocs(q);
         const fetchedCustomers = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
         setCustomers(fetchedCustomers);
         setAllFetchedCustomers(fetchedCustomers);
       } catch (error) {
         console.error("Error fetching customers:", error);
+        toast({ title: "Error", description: "Could not fetch customers.", variant: "destructive" });
       }
       setLoading(false);
     };
     fetchCustomers();
-  }, []);
+  }, [toast]);
 
 
   const filteredCustomers = useMemo(() => {
@@ -88,6 +85,14 @@ export default function AdminCustomersPage() {
   const isAllSelected = paginatedCustomers.length > 0 && selectedCustomerIds.length === paginatedCustomers.length;
   const isSomeSelected = selectedCustomerIds.length > 0 && selectedCustomerIds.length < paginatedCustomers.length;
 
+  // Mock action for role change or status toggle - to be replaced by Cloud Function calls
+  const handleMockAdminAction = (action: string, customerName: string) => {
+    toast({
+      title: "Action Required (Mock)",
+      description: `Would ${action} for ${customerName}. This requires a Cloud Function.`,
+    });
+    console.log(`Mock action: ${action} for ${customerName}`);
+  };
 
   return (
     <div className="space-y-6">
@@ -133,7 +138,8 @@ export default function AdminCustomersPage() {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>City</TableHead>
-                  <TableHead>Total Orders (Mock)</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status (Mock)</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -147,8 +153,8 @@ export default function AdminCustomersPage() {
                             <TableCell><Skeleton className="h-5 w-full" /></TableCell>
                             <TableCell><Skeleton className="h-5 w-1/2" /></TableCell>
                             <TableCell><Skeleton className="h-5 w-16" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-16" /></TableCell>
                             <TableCell className="text-right space-x-2">
-                                <Skeleton className="h-8 w-8 rounded-md inline-block" />
                                 <Skeleton className="h-8 w-8 rounded-md inline-block" />
                             </TableCell>
                         </TableRow>
@@ -171,17 +177,20 @@ export default function AdminCustomersPage() {
                     <TableCell className="font-medium text-foreground whitespace-nowrap">{customer.name}</TableCell>
                     <TableCell className="text-muted-foreground whitespace-nowrap">{customer.email}</TableCell>
                     <TableCell className="text-muted-foreground whitespace-nowrap">{customer.shippingAddress?.city || 'N/A'}</TableCell>
-                    <TableCell className="text-muted-foreground whitespace-nowrap">{customer.orderHistory?.length || 0}</TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap capitalize">
+                      {customer.role === 'admin' ? <ShieldCheck className="h-5 w-5 text-primary inline-block mr-1" /> : <UserCog className="h-5 w-5 text-muted-foreground inline-block mr-1" />}
+                      {customer.role || 'user'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground whitespace-nowrap">Active</TableCell> {/* Mock Status */}
                     <TableCell className="text-right space-x-2 whitespace-nowrap">
                       <Button variant="ghost" size="sm" asChild>
-                        <Link href={`/admin/customers/${customer.id}`}>View</Link>
+                        <Link href={`/admin/customers/${customer.id}`}>View/Edit</Link>
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={() => alert(`Edit customer ${customer.name} (mock)`)}>Edit</Button>
                     </TableCell>
                   </TableRow>
                 )) : (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                       No customers found.
                     </TableCell>
                   </TableRow>

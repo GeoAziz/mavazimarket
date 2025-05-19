@@ -1,30 +1,54 @@
 
 "use client";
 
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, UserCircle, MapPin, Mail, Phone, ShoppingBag, Edit3, MessageSquare, Loader2 } from 'lucide-react';
-import type { User, Order } from '@/lib/types';
+import { ArrowLeft, UserCircle, MapPin, Mail, Phone, ShoppingBag, Edit3, MessageSquare, Loader2, Save, ShieldCheck, UserCog, Ban, CheckCircle } from 'lucide-react';
+import type { User, Order, Address } from '@/lib/types';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { doc, getDoc, collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Input } from '@/components/ui/input';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+const customerInfoFormSchema = z.object({
+  name: z.string().min(2, "Name is too short.").default(""),
+  phone: z.string().optional().default(""),
+  // Address fields can be added here if making the whole address editable via this form
+  street: z.string().optional().default(""),
+  city: z.string().optional().default(""),
+  postalCode: z.string().optional().default(""),
+  country: z.string().optional().default("Kenya"),
+});
+type CustomerInfoFormValues = z.infer<typeof customerInfoFormSchema>;
 
 export default function AdminCustomerDetailPage() {
   const params = useParams();
   const customerId = params.customerId as string;
   const { toast } = useToast();
+  const router = useRouter();
 
   const [customer, setCustomer] = useState<User | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isEditingInfo, setIsEditingInfo] = useState(false);
+  const [isSubmittingInfo, setIsSubmittingInfo] = useState(false);
+
+  const form = useForm<CustomerInfoFormValues>({
+    resolver: zodResolver(customerInfoFormSchema),
+    defaultValues: { name: "", phone: "", street: "", city: "", postalCode: "", country: "Kenya" },
+  });
 
   useEffect(() => {
     if (!customerId) return;
@@ -32,16 +56,24 @@ export default function AdminCustomerDetailPage() {
     const fetchCustomerData = async () => {
       setLoading(true);
       try {
-        // Fetch customer details
         const customerDocRef = doc(db, "users", customerId);
         const customerSnap = await getDoc(customerDocRef);
         if (customerSnap.exists()) {
-          setCustomer({ id: customerSnap.id, ...customerSnap.data() } as User);
+          const customerData = { id: customerSnap.id, ...customerSnap.data() } as User;
+          setCustomer(customerData);
+          form.reset({
+            name: customerData.name || "",
+            phone: customerData.shippingAddress?.phone || customerData.phone || "", // Prefer shippingAddress.phone, fallback to user.phone
+            street: customerData.shippingAddress?.street || "",
+            city: customerData.shippingAddress?.city || "",
+            postalCode: customerData.shippingAddress?.postalCode || "",
+            country: customerData.shippingAddress?.country || "Kenya",
+          });
         } else {
           toast({ title: "Error", description: "Customer not found.", variant: "destructive" });
+          router.push("/admin/customers");
         }
 
-        // Fetch customer orders
         const ordersQuery = query(collection(db, "orders"), where("userId", "==", customerId), orderBy("orderDate", "desc"));
         const ordersSnapshot = await getDocs(ordersQuery);
         const fetchedOrders = ordersSnapshot.docs.map(d => {
@@ -62,7 +94,59 @@ export default function AdminCustomerDetailPage() {
     };
 
     fetchCustomerData();
-  }, [customerId, toast]);
+  }, [customerId, toast, router, form]);
+
+  const handleInfoSubmit = async (data: CustomerInfoFormValues) => {
+    if (!customer) return;
+    setIsSubmittingInfo(true);
+    try {
+      const userDocRef = doc(db, "users", customer.id);
+      const updatedData: Partial<User> = {
+        name: data.name,
+        phone: data.phone, // Assuming a top-level phone field on User type for direct contact
+        shippingAddress: {
+          street: data.street || customer.shippingAddress?.street || "",
+          city: data.city || customer.shippingAddress?.city || "",
+          postalCode: data.postalCode || customer.shippingAddress?.postalCode || "",
+          country: data.country || customer.shippingAddress?.country || "Kenya",
+          // phone: data.phone // Or keep phone separate if it's primary contact
+        }
+      };
+      await updateDoc(userDocRef, updatedData);
+      setCustomer(prev => prev ? { ...prev, ...updatedData, shippingAddress: updatedData.shippingAddress as Address } : null);
+      toast({ title: "Success", description: "Customer information updated." });
+      setIsEditingInfo(false);
+    } catch (error) {
+      console.error("Error updating customer info:", error);
+      toast({ title: "Error", description: "Failed to update customer information.", variant: "destructive" });
+    }
+    setIsSubmittingInfo(false);
+  };
+  
+  // Mock actions for role/status - these would call Cloud Functions
+  const handleRoleChange = (newRole: 'user' | 'admin') => {
+    if (!customer) return;
+    console.log(`ADMIN ACTION: Change role of ${customer.name} to ${newRole} (requires Cloud Function)`);
+    toast({
+      title: "Action Required (Mock)",
+      description: `Would change role of ${customer.name} to ${newRole}. This needs a Cloud Function.`,
+    });
+    // Mock update client-side for UI feedback
+    // setCustomer(prev => prev ? { ...prev, role: newRole } : null);
+  };
+
+  const handleAccountStatusToggle = () => {
+    if (!customer) return;
+    const newStatus = customer.disabled ? "Enable" : "Disable"; // Assuming 'disabled' field
+    console.log(`ADMIN ACTION: ${newStatus} account for ${customer.name} (requires Cloud Function)`);
+    toast({
+      title: "Action Required (Mock)",
+      description: `Would ${newStatus} account for ${customer.name}. This needs a Cloud Function.`,
+    });
+    // Mock update client-side for UI feedback
+    // setCustomer(prev => prev ? { ...prev, disabled: !prev.disabled } : null);
+  };
+
 
   if (loading) {
     return (
@@ -109,7 +193,6 @@ export default function AdminCustomerDetailPage() {
       </div>
 
       <div className="grid md:grid-cols-3 gap-6 items-start">
-        {/* Customer Profile Card */}
         <Card className="md:col-span-1 shadow-lg">
           <CardHeader className="items-center text-center">
             <Avatar className="h-24 w-24 mb-3 border-2 border-primary">
@@ -119,30 +202,92 @@ export default function AdminCustomerDetailPage() {
             <CardTitle className="text-xl">{customer.name}</CardTitle>
             <CardDescription>{customer.email}</CardDescription>
             <div className="mt-3 space-x-2">
-                <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground">
-                    <Edit3 size={14} className="mr-2" /> Edit (Mock)
-                </Button>
-                 <Button variant="outline" size="sm">
-                    <MessageSquare size={14} className="mr-2" /> Message (Mock)
+                <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setIsEditingInfo(prev => !prev)}>
+                    <Edit3 size={14} className="mr-2" /> {isEditingInfo ? "Cancel Edit" : "Edit Info"}
                 </Button>
             </div>
           </CardHeader>
           <Separator />
           <CardContent className="pt-4 text-sm space-y-2">
-            <div className="flex items-center">
-                <Phone size={14} className="mr-2 text-muted-foreground"/>
-                <span>{customer.phone || '+254 7XX XXX XXX (N/A)'}</span>
+             <div className="flex items-center capitalize">
+                {customer.role === 'admin' ? <ShieldCheck size={16} className="mr-2 text-primary"/> : <UserCog size={16} className="mr-2 text-muted-foreground"/>}
+                Role: <span className="font-medium ml-1">{customer.role || 'User'}</span>
             </div>
-            <div className="flex items-center">
-                <MapPin size={14} className="mr-2 text-muted-foreground"/>
-                <span>{customer.shippingAddress?.street || 'N/A'}, {customer.shippingAddress?.city || 'N/A'}</span>
+             <div className="flex items-center">
+                {customer.disabled ? <Ban size={16} className="mr-2 text-destructive"/> : <CheckCircle size={16} className="mr-2 text-green-500"/>}
+                Status: <span className="font-medium ml-1">{customer.disabled ? 'Disabled' : 'Active'} (Mock)</span>
             </div>
-            <p className="text-xs text-muted-foreground pt-2">Member since: {customer.createdAt ? new Date(customer.createdAt).toLocaleDateString() : 'N/A'}</p>
+            <p className="text-xs text-muted-foreground pt-2">Member since: {customer.createdAt ? (typeof customer.createdAt === 'string' ? new Date(customer.createdAt) : customer.createdAt.toDate()).toLocaleDateString() : 'N/A'}</p>
           </CardContent>
         </Card>
 
-        {/* Order History & Activity */}
         <div className="md:col-span-2 space-y-6">
+          {isEditingInfo && (
+            <Card className="shadow-md">
+              <CardHeader>
+                <CardTitle className="text-lg">Edit Customer Information</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(handleInfoSubmit)} className="space-y-4">
+                    <FormField control={form.control} name="name" render={({ field }) => (
+                      <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="phone" render={({ field }) => (
+                      <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <FormField control={form.control} name="street" render={({ field }) => (
+                      <FormItem><FormLabel>Street Address</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="city" render={({ field }) => (
+                        <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                        <FormField control={form.control} name="postalCode" render={({ field }) => (
+                        <FormItem><FormLabel>Postal Code</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                        )} />
+                    </div>
+                    <Button type="submit" disabled={isSubmittingInfo} className="bg-primary hover:bg-primary/90">
+                      {isSubmittingInfo && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Save Changes
+                    </Button>
+                  </form>
+                </Form>
+              </CardContent>
+            </Card>
+          )}
+          
+          <Card className="shadow-md">
+            <CardHeader>
+                <CardTitle className="text-lg flex items-center"><ShieldCheck size={18} className="mr-2 text-primary/80"/>Admin Actions (Mock)</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+                <div>
+                    <Label htmlFor="role-select">Change Role (Requires Cloud Function)</Label>
+                    <Select 
+                        defaultValue={customer.role || 'user'}
+                        onValueChange={(value) => handleRoleChange(value as 'user' | 'admin')}
+                    >
+                        <SelectTrigger id="role-select" className="mt-1">
+                            <SelectValue placeholder="Select role..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="user">User</SelectItem>
+                            <SelectItem value="admin">Admin</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <Button 
+                    variant={customer.disabled ? "outline" : "destructive"} 
+                    onClick={handleAccountStatusToggle}
+                    className="w-full"
+                >
+                    {customer.disabled ? <CheckCircle size={16} className="mr-2"/> : <Ban size={16} className="mr-2"/>}
+                    {customer.disabled ? 'Enable Account' : 'Disable Account'} (Requires Cloud Function)
+                </Button>
+                 <p className="text-xs text-muted-foreground">Note: Role and status changes are mocked and need backend Cloud Functions for real implementation.</p>
+            </CardContent>
+          </Card>
+
           <Card className="shadow-md">
             <CardHeader>
               <CardTitle className="text-lg flex items-center"><ShoppingBag size={18} className="mr-2 text-primary/80"/>Recent Orders</CardTitle>
@@ -150,7 +295,7 @@ export default function AdminCustomerDetailPage() {
             <CardContent>
               {orders.length > 0 ? (
                 <ul className="space-y-3">
-                  {orders.slice(0, 5).map(order => ( // Show last 5 orders
+                  {orders.slice(0, 5).map(order => (
                     <li key={order.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border rounded-md bg-muted/30 gap-2 sm:gap-0">
                       <div>
                         <Link href={`/admin/orders/${order.id}`} className="font-medium text-primary hover:underline">Order #{order.id.substring(0,8)}...</Link>
@@ -175,23 +320,6 @@ export default function AdminCustomerDetailPage() {
               ) : (
                 <p className="text-muted-foreground">No orders found for this customer.</p>
               )}
-              {orders.length > 5 && (
-                 <Button variant="link" className="mt-3 text-accent p-0 h-auto" asChild>
-                    <Link href="#">View All Orders ({orders.length}) (Mock)</Link>
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg">Customer Notes & Activity (Placeholder)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea placeholder="Add notes about this customer..." rows={3} />
-              <Button size="sm" className="mt-2">Save Note (Mock)</Button>
-              <Separator className="my-4"/>
-              <p className="text-sm text-muted-foreground">No activity logged yet.</p>
             </CardContent>
           </Card>
         </div>

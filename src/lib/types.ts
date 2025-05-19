@@ -7,7 +7,7 @@ export type Product = {
   description: string;
   price: number;
   images: string[]; // Array of image URLs
-  category: string; // Refers to Category ID
+  category: string; // Refers to Category ID (slug)
   subcategory: string; // Subcategory slug, e.g., "t-shirts"
   sizes: string[];
   colors: string[];
@@ -15,17 +15,16 @@ export type Product = {
   brand?: string;
   stockQuantity: number;
   averageRating?: number;
-  // reviews?: Review[]; // Reviews will be a subcollection
   slug: string;
   tags?: string[]; 
   dataAiHint?: string; 
   isPublished?: boolean;
-  createdAt?: Timestamp | string; // Store as Firestore Timestamp, allow string for mock
-  updatedAt?: Timestamp | string; // Store as Firestore Timestamp, allow string for mock
+  createdAt?: Timestamp | string; 
+  updatedAt?: Timestamp | string; 
 };
 
 export type Category = {
-  id: string; // Firestore document ID
+  id: string; // Firestore document ID (usually the slug)
   name: string; 
   slug: string;
   image: string;
@@ -36,7 +35,7 @@ export type Category = {
 };
 
 export type Subcategory = {
-  id:string; // Often same as slug for simplicity within the array
+  id:string; 
   name: string;
   slug: string;
   priceRange: string; 
@@ -44,25 +43,26 @@ export type Subcategory = {
 
 export type CartItem = {
   id: string; 
-  productId?: string; // To ensure we always have the product's original ID
+  productId?: string; 
   name: string;
   price: number;
   quantity: number;
   image: string;
   size?: string;
   color?: string;
-  slug?: string; // For linking back to product page from cart/order
+  slug?: string; 
 };
 
 export type User = {
-  id: string; // Firebase Auth UID
+  id: string; 
   name: string;
   email: string;
+  phone?: string; // Added phone
   profilePictureUrl?: string;
   shippingAddress?: Address;
-  // orderHistory will be fetched via query against Orders collection
-  wishlist?: string[]; // Array of product IDs
-  role?: 'user' | 'admin'; // For Firestore profile, custom claims handle Auth rules
+  wishlist?: string[]; 
+  role?: 'user' | 'admin'; 
+  disabled?: boolean; // For account status
   createdAt?: Timestamp | string;
   updatedAt?: Timestamp | string;
   dataAiHint?: string;
@@ -73,24 +73,23 @@ export type Address = {
   city: string;
   postalCode: string;
   country: string;
+  phone?: string; // Optional phone for shipping address
 };
 
 export type Order = {
-  id: string; // Firestore document ID
-  userId: string; // Firebase Auth UID of the customer
+  id: string; 
+  userId: string; 
   orderDate: Timestamp | string; 
   status: 'Pending' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: CartItem[];
   totalAmount: number;
   shippingAddress: Address;
   paymentMethod: string;
-  // paymentDetails?: any; // e.g., transaction ID
-  // trackingNumber?: string;
   updatedAt?: Timestamp | string;
 };
 
 export type Review = {
-  id: string; // Firestore document ID
+  id: string; 
   productId: string;
   userId: string;
   userName: string;
@@ -106,7 +105,6 @@ export type NavItem = {
   sublinks?: NavItem[];
 };
 
-// For general site settings document in Firestore
 export type SiteSettings = {
   siteName?: string;
   siteTagline?: string;
@@ -114,7 +112,7 @@ export type SiteSettings = {
   publicEmail?: string;
   publicPhone?: string;
   storeAddress?: string;
-  themeAppearance?: { // For values from /admin/appearance/customize
+  themeAppearance?: { 
     primaryColor?: string;
     accentColor?: string;
     backgroundColor?: string;
@@ -122,6 +120,5 @@ export type SiteSettings = {
     showHeroBanner?: boolean;
     showFeaturedProducts?: boolean;
   };
-  // Potentially other settings groups like 'paymentGateways', 'shippingOptions'
   updatedAt?: Timestamp;
 };

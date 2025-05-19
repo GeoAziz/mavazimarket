@@ -1,7 +1,7 @@
 
 import * as admin from 'firebase-admin';
 import { mockCategories, mockProducts, mockUser, mockOrders, mockReviews } from '../src/lib/mock-data'; 
-import type { Category, Product as AppProduct, User as AppUser, Order as AppOrder, Review as AppReview } from '../src/lib/types'; // Use app types
+import type { Category, Product as AppProduct, User as AppUser, Order as AppOrder, Review as AppReview } from '../src/lib/types'; 
 
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const serviceAccount = require('../mavazi-market-firebase-adminsdk-fbsvc-c781dbd1ae.json');
@@ -16,10 +16,9 @@ async function populateCategories() {
   console.log('Populating categories...');
   const categoriesCollection = db.collection('categories');
   for (const category of mockCategories) {
-    const { id, ...categoryData } = category; // Exclude mock ID if Firestore generates its own
-    // Ensure subcategories have IDs, if they don't, generate from slug
+    const { id, ...categoryData } = category; 
     const processedSubcategories = category.subcategories.map(sub => ({
-        id: sub.id || sub.slug, // Use existing id or slug as id
+        id: sub.id || sub.slug, 
         name: sub.name,
         slug: sub.slug,
         priceRange: sub.priceRange
@@ -31,7 +30,7 @@ async function populateCategories() {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-    await categoriesCollection.doc(category.slug).set(finalCategoryData); // Use slug as document ID for categories for easier querying
+    await categoriesCollection.doc(category.slug).set(finalCategoryData); 
     console.log(`Added category: ${category.name} (ID: ${category.slug})`);
   }
   console.log('Categories populated.');
@@ -41,13 +40,13 @@ async function populateProducts() {
   console.log('Populating products...');
   const productsCollection = db.collection('products');
   for (const product of mockProducts) {
-    const { reviews, id, ...productData } = product as any; // Exclude mock ID and reviews
+    const { reviews, id, ...productData } = product as any; 
     const finalProductData: Omit<AppProduct, 'id' | 'reviews'> & { createdAt: any, updatedAt: any} = {
         ...(productData as Omit<AppProduct, 'id' | 'reviews'>),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
-    const productDocRef = await productsCollection.add(finalProductData); // Let Firestore auto-generate ID
+    const productDocRef = await productsCollection.add(finalProductData); 
     console.log(`Added product: ${product.name} (ID: ${productDocRef.id})`);
 
     if (reviews && reviews.length > 0) {
@@ -56,7 +55,7 @@ async function populateProducts() {
         const {id: reviewId, ...reviewData} = review;
         await reviewsSubcollection.add({
             ...reviewData,
-            productId: productDocRef.id, // Link review to the new product ID
+            productId: productDocRef.id, 
             date: reviewData.date ? admin.firestore.Timestamp.fromDate(new Date(reviewData.date as string)) : admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         });
@@ -100,10 +99,11 @@ async function populateUsers() {
             console.log(`Admin custom claim ALREADY SET for ${adminEmail}.`);
         }
 
-        const adminProfileData = {
+        const adminProfileData: Partial<AppUser> = {
           name: "Admin Mavazi",
           email: adminEmail,
           role: "admin",
+          disabled: false,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
@@ -126,27 +126,28 @@ async function populateUsers() {
             email: standardUserEmail,
             password: standardUserPassword,
             displayName: mockUser.name,
-            emailVerified: true,
+            emailVerified: true, // Mocking as verified for testing ease
         });
         console.log(`Successfully CREATED standard auth user: ${standardAuthUser.uid} - ${standardUserEmail}`);
     } else {
         console.log(`Standard auth user ${standardUserEmail} ALREADY EXISTS in Firebase Auth: ${standardAuthUser.uid}. Ensuring password matches...`);
-        // For mock user, ensure password is correct for testing
         await admin.auth().updateUser(standardAuthUser.uid, { password: standardUserPassword });
          console.log(`Password updated for standard user ${standardUserEmail}.`);
     }
 
     if (standardAuthUser) {
         const { id, orderHistory, wishlist, ...userProfileData } = mockUser;
-        await usersCollection.doc(standardAuthUser.uid).set({
-            ...userProfileData,
-            email: standardUserEmail, // Ensure email is consistent
+        const finalUserProfile: Omit<AppUser, 'id' | 'orderHistory'> & { createdAt: any, updatedAt: any } = {
+            ...(userProfileData as Omit<AppUser, 'id' | 'orderHistory' | 'wishlist'>),
+            email: standardUserEmail, 
             name: mockUser.name,
             role: 'user',
-            wishlist: (wishlist as AppProduct[])?.map(p => p.id) || [], // Store product IDs
+            disabled: false,
+            wishlist: (wishlist as AppProduct[])?.map(p => p.id) || [], 
             createdAt: admin.firestore.FieldValue.serverTimestamp(),
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
+        };
+        await usersCollection.doc(standardAuthUser.uid).set(finalUserProfile, { merge: true });
         console.log(`Stored/updated profile for ${mockUser.name} (${standardUserEmail}) in Firestore.`);
     }
 
@@ -176,15 +177,15 @@ async function populateOrders() {
     }
 
     for (const order of mockOrders) {
-        const { id, ...orderData } = order; // Exclude mock ID
+        const { id, ...orderData } = order; 
         const finalOrderData: Omit<AppOrder, 'id'> & {updatedAt: any} = {
             ...(orderData as Omit<AppOrder, 'id'>),
             userId: mockUserAuth.uid,
             orderDate: admin.firestore.Timestamp.fromDate(new Date(order.orderDate as string)),
-            items: order.items.map(item => ({...item})), // Ensure items are plain objects
+            items: order.items.map(item => ({...item})), 
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
-        await ordersCollection.add(finalOrderData); // Let Firestore auto-generate ID
+        await ordersCollection.add(finalOrderData); 
         console.log(`Added order for user ${mockUser.email}`);
     }
     console.log('Orders populated.');
@@ -203,17 +204,17 @@ async function populateInitialSettings() {
         publicPhone: "+254 700 123 456",
         storeAddress: "123 Mavazi Towers, Biashara Street, Nairobi, Kenya",
         themeAppearance: {
-            primaryColor: "#DC143C",
-            accentColor: "#FF7F50",
-            backgroundColor: "#FAF9F6",
-            textColor: "#333333",
+            primaryColor: "#DC143C", // Deep Crimson
+            accentColor: "#FF7F50",  // Coral
+            backgroundColor: "#FAF9F6", // Off-white
+            textColor: "#333333", // Dark Gray
             showHeroBanner: true,
             showFeaturedProducts: true,
         },
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    await generalSettingsDocRef.set(defaultSettings, { merge: true }); // Use merge to avoid overwriting other settings if they exist
+    await generalSettingsDocRef.set(defaultSettings, { merge: true }); 
     console.log('Initial site settings populated/updated.');
 }
 
@@ -222,9 +223,9 @@ async function main() {
   try {
     await populateCategories();
     await populateProducts();
-    await populateUsers(); // This will create/update admin and mock user, and set admin claim
+    await populateUsers(); 
     await populateOrders();
-    await populateInitialSettings(); // Populate initial settings
+    await populateInitialSettings(); 
 
     console.log('Firestore database populated successfully!');
   } catch (error) {
