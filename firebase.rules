@@ -1,66 +1,71 @@
-
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Products: Publicly readable, Admin write
+    // Products: Anyone can read. Admins can write.
     match /products/{productId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
-      // Reviews subcollection
+      allow write: if request.auth != null && request.auth.token.admin == true; // Requires admin custom claim
+
+      // Reviews subcollection under products
       match /reviews/{reviewId} {
         allow read: if true;
+        // Logged-in users can create reviews, ensuring the review's userId matches their own
         allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-        allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+        // Users can only update/delete their own reviews
+        allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
       }
     }
 
-    // Categories: Publicly readable, Admin write
+    // Categories: Anyone can read. Admins can write.
     match /categories/{categoryId} {
       allow read: if true;
-      allow write: if request.auth != null && request.auth.token.admin == true;
+      allow write: if request.auth != null && request.auth.token.admin == true; // Requires admin custom claim
     }
 
     // Users:
-    // User can create their own document.
-    // User can read and update their own document.
-    // Admins can read all user documents and update them.
     match /users/{userId} {
+      // A user can only create their own document.
       allow create: if request.auth != null && request.auth.uid == userId;
-      allow read, update: if request.auth != null && (request.auth.uid == userId || request.auth.token.admin == true);
-      // allow delete: if request.auth != null && (request.auth.uid == userId || request.auth.token.admin == true); // Decide on delete policy
+      // A user can read, update, and delete their own document.
+      // An admin can also read and update any user document.
+      // (Admin delete of user accounts might be a separate, more careful operation, often via Admin SDK/Cloud Function)
+      allow read, update: if request.auth != null && 
+                                    (request.auth.uid == userId || request.auth.token.admin == true);
+      allow delete: if request.auth != null && request.auth.uid == userId; // User can delete own, admin delete needs consideration
+      // Admins can list user documents.
+      allow list: if request.auth != null && request.auth.token.admin == true; 
     }
 
-    // Orders: 
-    // User can create orders for themselves.
-    // User can read/update/delete their own orders.
-    // Admin can read/update/delete all orders.
+    // Orders:
     match /orders/{orderId} {
+      // User can create their own order, ensuring the order's userId matches their own
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
-      allow read, update, delete: if request.auth != null && 
-                                     ( (resource.data.userId == request.auth.uid) || 
-                                       (request.auth.token.admin == true) 
-                                     );
+      // User can read/update their own orders. Admin can read/update all orders.
+      allow read, update: if request.auth != null && 
+                           (resource.data.userId == request.auth.uid || request.auth.token.admin == true);
+      // Admins can list and delete any order.
+      allow list, delete: if request.auth != null && request.auth.token.admin == true;
     }
-    
-    // Discounts: Authenticated users read, Admin write (placeholder)
+
+    // Discounts: Authenticated users can read. Admins can write.
     match /discounts/{discountId} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && request.auth.token.admin == true;
     }
 
-    // Settings: Public read for general, admin write
-    // The 'general' document holds all settings, including themeAppearance.
-    match /settings/general {
-      allow read: if true;
+    // Settings: Publicly readable for general settings. Admins can write.
+    // Assumes 'general' is a common document ID for site-wide settings.
+    match /settings/{settingId} {
+      allow read: if true; // Most settings might be public for the app to function
       allow write: if request.auth != null && request.auth.token.admin == true;
     }
 
-    // Fallback: Deny all other direct reads/writes to other paths not explicitly defined.
-    // This makes it more secure by default.
-    match /{path=**}/documents/{document} {
-        allow read, write: if false;
+    // Fallback: Deny all other access by default for security.
+    // Any path not explicitly matched above will be denied.
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
