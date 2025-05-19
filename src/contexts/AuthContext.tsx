@@ -1,31 +1,74 @@
-
 "use client";
 
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { ReactNode } from 'react';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { auth } from '@/lib/firebase';
-import type { User } from '@/lib/types'; // Your app's User type
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase'; // db import added
+import type { User as AppUserType } from '@/lib/types'; // Renamed to avoid conflict
+import { doc, getDoc, updateDoc, arrayUnion, writeBatch } from 'firebase/firestore'; // Added updateDoc, arrayUnion, writeBatch
+import { useCart } from './CartContext'; // Import useCart
+
+const GUEST_WISHLIST_LOCAL_STORAGE_KEY = 'mavaziGuestWishlist';
 
 interface AuthContextType {
   currentUser: FirebaseUser | null;
-  appUser: User | null; // Your application's user profile type
+  appUser: AppUserType | null;
   isAdmin: boolean;
   loading: boolean;
   error: Error | null;
+  fetchAppUser: (uid: string) => Promise<void>; // Expose a function to refetch appUser
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
-  const [appUser, setAppUser] = useState<User | null>(null);
+  const [appUser, setAppUser] = useState<AppUserType | null>(null);
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const cartContext = useCart(); // Get cart context
+
+  const fetchAppUser = async (uid: string) => {
+    try {
+      const userDocRef = doc(db, "users", uid);
+      const userDocSnap = await getDoc(userDocRef);
+      if (userDocSnap.exists()) {
+        setAppUser({ id: userDocSnap.id, ...userDocSnap.data() } as AppUserType);
+      } else {
+        console.warn("No app user profile found in Firestore for UID:", uid);
+        setAppUser(null);
+      }
+    } catch (e) {
+      console.error("Error fetching app user profile:", e);
+      setError(e instanceof Error ? e : new Error("Failed to fetch user profile"));
+      setAppUser(null);
+    }
+  };
+
+  const mergeGuestWishlistToFirestore = async (userId: string) => {
+    if (typeof window === 'undefined') return;
+    const guestWishlistData = localStorage.getItem(GUEST_WISHLIST_LOCAL_STORAGE_KEY);
+    if (!guestWishlistData) return;
+
+    const guestWishlist: string[] = JSON.parse(guestWishlistData);
+    if (guestWishlist.length === 0) return;
+
+    try {
+      const userDocRef = doc(db, "users", userId);
+      // Use arrayUnion to merge without duplicates, or fetch existing and merge manually if more control is needed
+      await updateDoc(userDocRef, {
+        wishlist: arrayUnion(...guestWishlist) 
+      });
+      console.log("Guest wishlist merged to Firestore.");
+      localStorage.removeItem(GUEST_WISHLIST_LOCAL_STORAGE_KEY);
+      await fetchAppUser(userId); // Re-fetch appUser to update context with merged wishlist
+    } catch (error) {
+      console.error("Error merging guest wishlist to Firestore:", error);
+    }
+  };
+
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -33,31 +76,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setError(null);
       if (user) {
         setCurrentUser(user);
-        // Check for admin role (e.g., via email or custom claim if set up)
-        // For simplicity, we'll check the email you provided for admin
-        const adminEmail = "admin@mixostore.com";
+        const adminEmail = "admin@mixostore.com"; // Ensure this is your admin email
         setIsAdmin(user.email === adminEmail);
+        
+        await fetchAppUser(user.uid);
 
-        // Fetch app-specific user profile from Firestore
-        try {
-          const userDocRef = doc(db, "users", user.uid);
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            setAppUser({ id: userDocSnap.id, ...userDocSnap.data() } as User);
-          } else {
-            console.warn("No app user profile found in Firestore for UID:", user.uid);
-            setAppUser(null); // Or create one if necessary
-          }
-        } catch (e) {
-          console.error("Error fetching app user profile:", e);
-          setError(e instanceof Error ? e : new Error("Failed to fetch user profile"));
-          setAppUser(null);
+        if (cartContext) {
+          await cartContext.mergeGuestCartToFirestore(user.uid); // Merge cart first
+          await cartContext.loadCartFromFirestore(user.uid);   // Then load the full Firestore cart
         }
+        await mergeGuestWishlistToFirestore(user.uid);
 
       } else {
         setCurrentUser(null);
         setAppUser(null);
         setIsAdmin(false);
+        if (cartContext) {
+          cartContext.clearCartContextState(); // Clear cart items from context but keep local storage for guest
+          // Optionally load guest cart from local storage here if not already handled by CartContext's own useEffect
+          const localCartData = localStorage.getItem('mavaziGuestCart');
+          if (localCartData) {
+            // This might conflict if CartContext also tries to load. Ensure one source of truth.
+            // For simplicity, CartContext handles its own guest loading.
+          }
+        }
       }
       setLoading(false);
     }, (err) => {
@@ -67,17 +109,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartContext]); // cartContext added as dependency
 
   const value = {
     currentUser,
     appUser,
     isAdmin,
     loading,
-    error
+    error,
+    fetchAppUser,
   };
 
-  return <AuthContext.Provider value={value}>{!loading && children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
 
 export const useAuth = () => {

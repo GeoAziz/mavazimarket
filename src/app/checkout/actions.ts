@@ -1,9 +1,8 @@
-
 "use server";
 
 import { db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import type { CartItem, Address, Order, User } from '@/lib/types';
+import type { CartItem, Address, Order } from '@/lib/types'; // User type not needed here directly
 import { sendOrderConfirmationEmail } from '@/lib/emailService';
 
 interface CheckoutFormData {
@@ -17,10 +16,10 @@ interface CheckoutFormData {
 }
 
 interface PlaceOrderArgs {
-  userId: string | null; // Nullable if guest checkout is allowed
+  userId: string | null;
   formData: CheckoutFormData;
-  cartItems: CartItem[];
-  totalAmount: number;
+  cartItems: CartItem[]; // Expecting dynamic cart items
+  totalAmount: number;   // Expecting dynamic total amount
 }
 
 export async function placeOrderAction(args: PlaceOrderArgs): Promise<{ success: boolean; orderId?: string; error?: string }> {
@@ -34,14 +33,24 @@ export async function placeOrderAction(args: PlaceOrderArgs): Promise<{ success:
     street: formData.address,
     city: formData.city,
     postalCode: formData.postalCode || '',
-    country: 'Kenya', // Assuming Kenya for now
+    country: 'Kenya', 
   };
 
   const orderData: Omit<Order, 'id'> = {
-    userId: userId || 'guest', // Handle guest users
-    orderDate: serverTimestamp(), // Firestore will set this
+    userId: userId || 'guest_user', // Mark guest orders explicitly if needed
+    orderDate: serverTimestamp(), 
     status: 'Pending',
-    items: cartItems,
+    items: cartItems.map(item => ({ // Ensure we only store necessary fields from CartItem
+        id: item.productId || item.id, // Prefer productId if available (actual product ref)
+        name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        image: item.image,
+        size: item.size,
+        color: item.color,
+        slug: item.slug,
+        productId: item.productId || item.id,
+    })),
     totalAmount,
     shippingAddress,
     paymentMethod: formData.paymentMethod,
@@ -52,26 +61,25 @@ export async function placeOrderAction(args: PlaceOrderArgs): Promise<{ success:
     const docRef = await addDoc(collection(db, "orders"), orderData);
     console.log("Order placed with ID: ", docRef.id);
 
-    // Send order confirmation email
-    // Construct a temporary Order object with the ID and resolved timestamps for the email
     const confirmedOrderForEmail: Order = {
       ...orderData,
       id: docRef.id,
-      orderDate: new Date().toISOString(), // Use current date for email, Firestore timestamp is server-side
+      orderDate: new Date().toISOString(), 
       updatedAt: new Date().toISOString(),
     };
 
     const emailResult = await sendOrderConfirmationEmail(formData.email, confirmedOrderForEmail, formData.fullName);
     if (!emailResult.success) {
       console.warn("Order placed, but confirmation email failed to send:", emailResult.error);
-      // You might want to log this for manual follow-up, but don't fail the whole order placement
     }
-
-    // Here you would typically clear the user's cart (if using Firestore for cart)
-    // or clear localStorage cart for guest/client-side cart.
+    
+    // IMPORTANT: Clearing the cart should be handled on the client-side after this action successfully returns.
+    // This server action cannot directly modify client-side CartContext or localStorage.
+    // The client will call cartContext.clearCart().
+    // If the cart was also in Firestore, this action *could* delete it, but it's safer if client triggers clear.
 
     return { success: true, orderId: docRef.id };
-  } catch (error),
+  } catch (error) {
     console.error("Error placing order: ", error);
     let errorMessage = "Failed to place order due to an unexpected error.";
     if (error instanceof Error) {

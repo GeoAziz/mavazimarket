@@ -1,4 +1,3 @@
-
 "use client";
 
 import Image from 'next/image';
@@ -11,11 +10,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
+  // DialogFooter, // Footer not explicitly used, content handles buttons
   DialogClose
 } from '@/components/ui/dialog';
 import { ShoppingCart, ExternalLink, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useCart } from '@/contexts/CartContext'; // Import useCart
 
 interface QuickViewModalProps {
   product: Product | null;
@@ -25,19 +25,20 @@ interface QuickViewModalProps {
 
 export function QuickViewModal({ product, isOpen, onClose }: QuickViewModalProps) {
   const { toast } = useToast();
+  const { addToCart } = useCart(); // Use cart context
 
   if (!product) {
     return null;
   }
 
-  const handleAddToCart = () => {
-    console.log('Add to cart from quick view:', product.id, product.name);
+  const handleAddToCartFromModal = () => {
+    addToCart(product, 1); // Add 1 quantity by default, no size/color selection in this simplified modal
     toast({
       title: "Added to Cart",
       description: `${product.name} has been added to your cart.`,
       variant: "default",
     });
-    // onClose(); // Optionally close modal after adding to cart
+    // onClose(); // Optionally close modal after adding
   };
 
   return (
@@ -70,17 +71,14 @@ export function QuickViewModal({ product, isOpen, onClose }: QuickViewModalProps
           <div className="space-y-4 flex flex-col">
             <p className="text-3xl font-extrabold text-foreground">KSh {product.price.toLocaleString()}</p>
             
-            {/* Simplified selectors for demo - real implementation would need state */}
             {product.colors && product.colors.length > 0 && (
               <div>
-                <p className="text-sm font-medium mb-1">Color: <span className="text-muted-foreground">{product.colors[0]}</span></p>
-                {/* Placeholder for color swatches */}
+                <p className="text-sm font-medium mb-1">Available Colors: <span className="text-muted-foreground">{product.colors.join(', ')}</span></p>
               </div>
             )}
             {product.sizes && product.sizes.length > 0 && (
               <div>
-                <p className="text-sm font-medium mb-1">Size: <span className="text-muted-foreground">{product.sizes[0]}</span></p>
-                {/* Placeholder for size selector */}
+                <p className="text-sm font-medium mb-1">Available Sizes: <span className="text-muted-foreground">{product.sizes.join(', ')}</span></p>
               </div>
             )}
 
@@ -89,7 +87,7 @@ export function QuickViewModal({ product, isOpen, onClose }: QuickViewModalProps
             </DialogDescription>
             
             <div className="pt-4 space-y-3 mt-auto">
-              <Button size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleAddToCart}>
+              <Button size="lg" className="w-full bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleAddToCartFromModal}>
                 <ShoppingCart size={20} className="mr-2" /> Add to Cart
               </Button>
               <Button size="lg" variant="outline" className="w-full" asChild>

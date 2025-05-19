@@ -1,45 +1,58 @@
-
 "use client";
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { mockCartItems } from '@/lib/mock-data';
-import type { CartItem } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
-import { Minus, Plus, Trash2, ShoppingBag, Info, PackageOpen } from 'lucide-react'; // Added PackageOpen
+import { Minus, Plus, Trash2, ShoppingBag, Info, PackageOpen, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { useState, useEffect } from 'react';
-
+import { useCart } from '@/contexts/CartContext'; // Import useCart
+import { useToast } from '@/hooks/use-toast';
 
 export default function CartPage() {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
-  
-  useEffect(() => {
-    setCartItems(mockCartItems);
-  }, []);
+  const { 
+    cartItems, 
+    updateQuantity, 
+    removeFromCart, 
+    totalAmount, 
+    isCartLoaded 
+  } = useCart();
+  const { toast } = useToast();
 
-  const updateQuantity = (id: string, newQuantity: number) => {
-    if (newQuantity < 1) { // Remove item if quantity becomes 0 or less
-      removeItem(id);
+  const handleUpdateQuantity = (id: string, newQuantity: number) => {
+    if (isNaN(newQuantity)) return; // Prevent NaN issues
+    const numQuantity = Number(newQuantity);
+    if (numQuantity < 1) {
+      // Optionally confirm before removing if quantity becomes 0
+      // For now, just set to 1 if user tries to go below 1 via input field
+      updateQuantity(id, 1); 
+      toast({ title: "Quantity Updated", description: "Minimum quantity is 1.", variant: "default"});
       return;
     }
-    setCartItems(prevItems => 
-      prevItems.map(item => item.id === id ? { ...item, quantity: newQuantity } : item)
-    );
+    updateQuantity(id, numQuantity);
   };
 
-  const removeItem = (id: string) => {
-    setCartItems(prevItems => prevItems.filter(item => item.id !== id));
+  const handleRemoveItem = (id: string) => {
+    removeFromCart(id);
+    toast({ title: "Item Removed", description: "Item removed from your cart.", variant: "default"});
   };
 
-  const subtotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const subtotal = totalAmount; // totalAmount from context is already the subtotal
   const taxes = subtotal * 0.16; 
   const shippingFee = subtotal > 3000 ? 0 : 250; 
-  const total = subtotal + taxes + shippingFee;
+  const totalWithFees = subtotal + taxes + shippingFee;
+
+  if (!isCartLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-[calc(100vh-400px)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="ml-3 text-muted-foreground">Loading your cart...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -82,7 +95,7 @@ export default function CartPage() {
                   data-ai-hint="product clothing"
                 />
                 <div className="flex-grow">
-                  <Link href={`/products/${item.id.replace('-01', '')}`} className="hover:underline"> 
+                  <Link href={`/products/${item.slug || item.productId}`} className="hover:underline"> 
                     <h3 className="text-lg font-semibold text-foreground">{item.name}</h3>
                   </Link>
                   {item.size && <p className="text-sm text-muted-foreground">Size: {item.size}</p>}
@@ -91,21 +104,22 @@ export default function CartPage() {
                 </div>
                 <div className="flex flex-col sm:items-end gap-2 sm:gap-4 mt-4 sm:mt-0 w-full sm:w-auto">
                   <div className="flex items-center border rounded-md">
-                    <Button variant="ghost" size="icon" onClick={() => updateQuantity(item.id, item.quantity - 1)} className="h-8 w-8 text-muted-foreground hover:text-primary">
+                    <Button variant="ghost" size="icon" onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)} disabled={item.quantity <=1} className="h-8 w-8 text-muted-foreground hover:text-primary">
                       <Minus size={16} />
                     </Button>
                     <Input
                       type="number"
                       value={item.quantity}
-                      onChange={(e) => updateQuantity(item.id, parseInt(e.target.value))}
+                      onChange={(e) => handleUpdateQuantity(item.id, parseInt(e.target.value))}
                       className="w-12 h-8 text-center border-0 focus-visible:ring-0 focus-visible:ring-offset-0 bg-transparent"
                       aria-label="Quantity"
+                      min="1"
                     />
-                    <Button variant="ghost" size="icon" onClick={() => updateQuantity(item.id, item.quantity + 1)} className="h-8 w-8 text-muted-foreground hover:text-primary">
+                    <Button variant="ghost" size="icon" onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)} className="h-8 w-8 text-muted-foreground hover:text-primary">
                       <Plus size={16} />
                     </Button>
                   </div>
-                  <Button variant="ghost" size="sm" onClick={() => removeItem(item.id)} className="text-destructive hover:text-destructive/80 self-start sm:self-end">
+                  <Button variant="ghost" size="sm" onClick={() => handleRemoveItem(item.id)} className="text-destructive hover:text-destructive/80 self-start sm:self-end">
                     <Trash2 size={16} className="mr-1 sm:mr-0" /> <span className="sm:hidden">Remove</span>
                   </Button>
                 </div>
@@ -137,7 +151,7 @@ export default function CartPage() {
                 <Separator />
                 <div className="flex justify-between text-xl font-bold">
                   <span className="text-primary">Total</span>
-                  <span className="text-primary">KSh {total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                  <span className="text-primary">KSh {totalWithFees.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                 </div>
                 <Alert className="mt-4 bg-accent/10 border-accent/30">
                   <Info className="h-4 w-4 text-accent" />
