@@ -7,7 +7,7 @@ import { Footer } from '@/components/layout/Footer';
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeApplicator } from '@/components/layout/ThemeApplicator';
-import { CartProvider } from '@/contexts/CartContext'; // Import CartProvider
+import { CartProvider } from '@/contexts/CartContext';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -27,8 +27,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className={'font-sans antialiased flex flex-col min-h-screen'}>
-        <CartProvider> {/* CartProvider now wraps AuthProvider */}
-          <AuthProvider>
+        <AuthProvider> {/* AuthProvider now wraps CartProvider */}
+          <CartProvider>
             <ThemeApplicator />
             <Header />
             <main className="flex-grow container mx-auto px-4 py-8">
@@ -36,8 +36,8 @@ export default function RootLayout({
             </main>
             <Footer />
             <Toaster />
-          </AuthProvider>
-        </CartProvider>
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   );
