@@ -1,13 +1,14 @@
+
 "use client";
 
 import type { User as FirebaseUser } from 'firebase/auth';
 import { onAuthStateChanged } from 'firebase/auth';
 import type { ReactNode } from 'react';
-import { createContext, useContext, useEffect, useState } from 'react';
-import { auth, db } from '@/lib/firebase'; // db import added
-import type { User as AppUserType } from '@/lib/types'; // Renamed to avoid conflict
-import { doc, getDoc, updateDoc, arrayUnion, writeBatch } from 'firebase/firestore'; // Added updateDoc, arrayUnion, writeBatch
-import { useCart } from './CartContext'; // Import useCart
+import { createContext, useContext, useEffect, useState, useCallback } from 'react'; // Added useCallback
+import { auth, db } from '@/lib/firebase';
+import type { User as AppUserType } from '@/lib/types';
+import { doc, getDoc, updateDoc, arrayUnion, writeBatch } from 'firebase/firestore';
+// Removed direct import of useCart here
 
 const GUEST_WISHLIST_LOCAL_STORAGE_KEY = 'mavaziGuestWishlist';
 
@@ -17,7 +18,8 @@ interface AuthContextType {
   isAdmin: boolean;
   loading: boolean;
   error: Error | null;
-  fetchAppUser: (uid: string) => Promise<void>; // Expose a function to refetch appUser
+  fetchAppUser: (uid: string) => Promise<void>;
+  mergeGuestWishlistToFirestore: (userId: string) => Promise<void>; // Added for explicit call
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -28,9 +30,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const cartContext = useCart(); // Get cart context
 
-  const fetchAppUser = async (uid: string) => {
+  // cartContext is no longer initialized at the top level here
+
+  const fetchAppUser = useCallback(async (uid: string) => {
+    // Added useCallback for stability if passed as dependency
     try {
       const userDocRef = doc(db, "users", uid);
       const userDocSnap = await getDoc(userDocRef);
@@ -45,9 +49,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setError(e instanceof Error ? e : new Error("Failed to fetch user profile"));
       setAppUser(null);
     }
-  };
+  }, []);
 
-  const mergeGuestWishlistToFirestore = async (userId: string) => {
+  const mergeGuestWishlistToFirestore = useCallback(async (userId: string) => {
+    // Added useCallback
     if (typeof window === 'undefined') return;
     const guestWishlistData = localStorage.getItem(GUEST_WISHLIST_LOCAL_STORAGE_KEY);
     if (!guestWishlistData) return;
@@ -57,18 +62,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     try {
       const userDocRef = doc(db, "users", userId);
-      // Use arrayUnion to merge without duplicates, or fetch existing and merge manually if more control is needed
       await updateDoc(userDocRef, {
-        wishlist: arrayUnion(...guestWishlist) 
+        wishlist: arrayUnion(...guestWishlist)
       });
       console.log("Guest wishlist merged to Firestore.");
       localStorage.removeItem(GUEST_WISHLIST_LOCAL_STORAGE_KEY);
-      await fetchAppUser(userId); // Re-fetch appUser to update context with merged wishlist
+      await fetchAppUser(userId);
     } catch (error) {
       console.error("Error merging guest wishlist to Firestore:", error);
     }
-  };
-
+  }, [fetchAppUser]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -76,30 +79,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setError(null);
       if (user) {
         setCurrentUser(user);
-        const adminEmail = "admin@mixostore.com"; // Ensure this is your admin email
+        const adminEmail = "admin@mixostore.com";
         setIsAdmin(user.email === adminEmail);
         
         await fetchAppUser(user.uid);
-
-        if (cartContext) {
-          await cartContext.mergeGuestCartToFirestore(user.uid); // Merge cart first
-          await cartContext.loadCartFromFirestore(user.uid);   // Then load the full Firestore cart
-        }
-        await mergeGuestWishlistToFirestore(user.uid);
+        // Cart merging/loading will be handled by CartProvider reacting to currentUser
+        await mergeGuestWishlistToFirestore(user.uid); 
 
       } else {
         setCurrentUser(null);
         setAppUser(null);
         setIsAdmin(false);
-        if (cartContext) {
-          cartContext.clearCartContextState(); // Clear cart items from context but keep local storage for guest
-          // Optionally load guest cart from local storage here if not already handled by CartContext's own useEffect
-          const localCartData = localStorage.getItem('mavaziGuestCart');
-          if (localCartData) {
-            // This might conflict if CartContext also tries to load. Ensure one source of truth.
-            // For simplicity, CartContext handles its own guest loading.
-          }
-        }
+        // Cart clearing will be handled by CartProvider reacting to currentUser being null
       }
       setLoading(false);
     }, (err) => {
@@ -109,8 +100,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribe();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cartContext]); // cartContext added as dependency
+  }, [fetchAppUser, mergeGuestWishlistToFirestore]);
 
   const value = {
     currentUser,
@@ -119,6 +109,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     loading,
     error,
     fetchAppUser,
+    mergeGuestWishlistToFirestore, // Provide the function
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

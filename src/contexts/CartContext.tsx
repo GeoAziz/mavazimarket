@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { ReactNode } from 'react';
@@ -15,13 +16,13 @@ interface CartContextType {
   removeFromCart: (productId: string) => void;
   updateQuantity: (productId: string, newQuantity: number) => void;
   clearCart: () => Promise<void>;
-  loadCartFromFirestore: (userId: string) => Promise<void>;
-  mergeGuestCartToFirestore: (userId: string) => Promise<void>;
+  // loadCartFromFirestore: (userId: string) => Promise<void>; // Made internal
+  // mergeGuestCartToFirestore: (userId: string) => Promise<void>; // Made internal
   totalItems: number;
   totalAmount: number;
   isCartLoaded: boolean;
   clearLocalCart: () => void;
-  clearCartContextState: () => void; // For logout
+  clearCartContextState: () => void; 
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -29,97 +30,107 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartLoaded, setIsCartLoaded] = useState(false);
-  const { currentUser } = useAuth();
+  const { currentUser } = useAuth(); // useAuth hook is called here
 
-  const getCartCollectionRef = (userId: string) => {
+  const getCartCollectionRef = useCallback((userId: string) => {
     return collection(db, "users", userId, "cartItems");
-  };
-
-  // Load cart from local storage for guests or if no user
-  useEffect(() => {
-    if (!currentUser && typeof window !== 'undefined') {
-      const localCartData = localStorage.getItem(CART_LOCAL_STORAGE_KEY);
-      if (localCartData) {
-        setCartItems(JSON.parse(localCartData));
-      }
-      setIsCartLoaded(true);
-    }
-  }, [currentUser]);
-
-  // Save to local storage for guests
-  useEffect(() => {
-    if (!currentUser && typeof window !== 'undefined' && isCartLoaded) {
-      localStorage.setItem(CART_LOCAL_STORAGE_KEY, JSON.stringify(cartItems));
-    }
-  }, [cartItems, currentUser, isCartLoaded]);
+  }, []);
 
   const loadCartFromFirestore = useCallback(async (userId: string) => {
+    console.log("CartContext: Attempting to load cart from Firestore for user:", userId);
     setIsCartLoaded(false);
     try {
       const cartColRef = getCartCollectionRef(userId);
       const snapshot = await getDocs(cartColRef);
       const firestoreCartItems = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CartItem));
       setCartItems(firestoreCartItems);
+      console.log("CartContext: Cart loaded from Firestore:", firestoreCartItems);
     } catch (error) {
-      console.error("Error loading cart from Firestore:", error);
+      console.error("CartContext: Error loading cart from Firestore:", error);
     } finally {
       setIsCartLoaded(true);
     }
-  }, []);
+  }, [getCartCollectionRef]);
   
   const mergeGuestCartToFirestore = useCallback(async (userId: string) => {
+    console.log("CartContext: Attempting to merge guest cart to Firestore for user:", userId);
     if (typeof window === 'undefined') return;
     const localCartData = localStorage.getItem(CART_LOCAL_STORAGE_KEY);
-    if (!localCartData) return;
+    if (!localCartData) {
+      console.log("CartContext: No guest cart data to merge.");
+      return;
+    }
 
     const guestCartItems: CartItem[] = JSON.parse(localCartData);
-    if (guestCartItems.length === 0) return;
+    if (guestCartItems.length === 0) {
+      console.log("CartContext: Guest cart is empty, nothing to merge.");
+      return;
+    }
 
     try {
       const cartColRef = getCartCollectionRef(userId);
       const batch = writeBatch(db);
 
-      // Fetch current Firestore cart to avoid duplicates and merge quantities
       const snapshot = await getDocs(cartColRef);
       const firestoreCartItemsMap = new Map(snapshot.docs.map(doc => [doc.id, doc.data() as CartItem]));
 
       guestCartItems.forEach(guestItem => {
         const firestoreItem = firestoreCartItemsMap.get(guestItem.id);
         if (firestoreItem) {
-          // Item exists, update quantity (or other merging logic)
           const newQuantity = firestoreItem.quantity + guestItem.quantity;
           batch.update(doc(cartColRef, guestItem.id), { quantity: newQuantity });
         } else {
-          // New item, add it
           batch.set(doc(cartColRef, guestItem.id), guestItem);
         }
       });
 
       await batch.commit();
-      console.log("Guest cart merged to Firestore.");
-      localStorage.removeItem(CART_LOCAL_STORAGE_KEY); // Clear local cart after merge
-      await loadCartFromFirestore(userId); // Reload cart to reflect merged state
+      console.log("CartContext: Guest cart merged to Firestore.");
+      localStorage.removeItem(CART_LOCAL_STORAGE_KEY);
     } catch (error) {
-      console.error("Error merging guest cart to Firestore:", error);
+      console.error("CartContext: Error merging guest cart to Firestore:", error);
     }
-  }, [loadCartFromFirestore]);
+  }, [getCartCollectionRef]);
+
+  // Effect to handle cart loading/merging based on auth state
+  useEffect(() => {
+    if (currentUser) {
+      console.log("CartContext: User logged in (", currentUser.uid, "), merging and loading Firestore cart.");
+      const performAsyncOps = async () => {
+        await mergeGuestCartToFirestore(currentUser.uid);
+        await loadCartFromFirestore(currentUser.uid);
+      };
+      performAsyncOps();
+    } else {
+      console.log("CartContext: No user logged in, loading guest cart from localStorage.");
+      if (typeof window !== 'undefined') {
+        const localCartData = localStorage.getItem(CART_LOCAL_STORAGE_KEY);
+        if (localCartData) {
+          setCartItems(JSON.parse(localCartData));
+        } else {
+          setCartItems([]); // Ensure cart is empty if no local data
+        }
+      }
+      setIsCartLoaded(true);
+    }
+  }, [currentUser, loadCartFromFirestore, mergeGuestCartToFirestore]);
 
 
   const addToCart = async (product: ProductType, quantity: number = 1, selectedSize?: string, selectedColor?: string) => {
+    const cartItemId = `${product.id}${selectedSize ? `-${selectedSize}` : ''}${selectedColor ? `-${selectedColor}` : ''}`;
+    
     setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => 
-        item.id === product.id && item.size === selectedSize && item.color === selectedColor
-      );
+      const existingItem = prevItems.find(item => item.id === cartItemId);
       let newItems;
       if (existingItem) {
         newItems = prevItems.map(item =>
-          item.id === product.id && item.size === selectedSize && item.color === selectedColor
+          item.id === cartItemId
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       } else {
         newItems = [...prevItems, {
-          id: product.id, // Use product.id as the cart item ID for simplicity if variants are simple
+          id: cartItemId,
           productId: product.id,
           name: product.name,
           price: product.price,
@@ -132,22 +143,21 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (currentUser) {
-        // Update Firestore
-        const itemToAddOrUpdate = newItems.find(item => item.id === product.id && item.size === selectedSize && item.color === selectedColor);
+        const itemToAddOrUpdate = newItems.find(item => item.id === cartItemId);
         if (itemToAddOrUpdate) {
-          const itemDocRef = doc(getCartCollectionRef(currentUser.uid), itemToAddOrUpdate.id); // Use item id for doc id
-          setDoc(itemDocRef, itemToAddOrUpdate, { merge: true }).catch(console.error);
+          const itemDocRef = doc(getCartCollectionRef(currentUser.uid), itemToAddOrUpdate.id);
+          setDoc(itemDocRef, itemToAddOrUpdate, { merge: true }).catch(err => console.error("Error adding/updating item in Firestore cart:", err));
         }
       }
       return newItems;
     });
   };
 
-  const removeFromCart = async (itemId: string) => { // itemId is now the specific cart item's ID (product.id + variant info if needed)
+  const removeFromCart = async (itemId: string) => {
     setCartItems(prevItems => {
       const newItems = prevItems.filter(item => item.id !== itemId);
       if (currentUser) {
-        deleteDoc(doc(getCartCollectionRef(currentUser.uid), itemId)).catch(console.error);
+        deleteDoc(doc(getCartCollectionRef(currentUser.uid), itemId)).catch(err => console.error("Error removing item from Firestore cart:", err));
       }
       return newItems;
     });
@@ -165,7 +175,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       if (currentUser) {
         const itemToUpdate = newItems.find(item => item.id === itemId);
         if (itemToUpdate) {
-            setDoc(doc(getCartCollectionRef(currentUser.uid), itemId), itemToUpdate, {merge: true}).catch(console.error);
+            setDoc(doc(getCartCollectionRef(currentUser.uid), itemId), itemToUpdate, {merge: true}).catch(err => console.error("Error updating quantity in Firestore cart:", err));
         }
       }
       return newItems;
@@ -175,12 +185,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const clearLocalCart = () => {
     if (typeof window !== 'undefined') {
         localStorage.removeItem(CART_LOCAL_STORAGE_KEY);
+        console.log("CartContext: Local guest cart cleared.");
     }
   };
   
   const clearCartContextState = () => {
      setCartItems([]);
-     setIsCartLoaded(false); // Reset loaded state so it can reload for guest or new user
+     setIsCartLoaded(false); 
+     console.log("CartContext: Context state cleared (e.g., on logout).");
   }
 
   const clearCart = async () => {
@@ -188,17 +200,29 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       try {
         const cartColRef = getCartCollectionRef(currentUser.uid);
         const snapshot = await getDocs(cartColRef);
-        const batch = writeBatch(db);
-        snapshot.docs.forEach(d => batch.delete(d.ref));
-        await batch.commit();
+        if (snapshot.docs.length > 0) {
+          const batch = writeBatch(db);
+          snapshot.docs.forEach(d => batch.delete(d.ref));
+          await batch.commit();
+          console.log("CartContext: Firestore cart cleared for user:", currentUser.uid);
+        }
       } catch (error) {
-        console.error("Error clearing Firestore cart:", error);
+        console.error("CartContext: Error clearing Firestore cart:", error);
       }
     } else {
       clearLocalCart();
     }
-    setCartItems([]); // Clear context state immediately
+    setCartItems([]); 
   };
+
+  // Save to local storage for guests
+  useEffect(() => {
+    if (!currentUser && isCartLoaded) { // Only save if cart is loaded and user is guest
+      console.log("CartContext: Saving guest cart to localStorage:", cartItems);
+      localStorage.setItem(CART_LOCAL_STORAGE_KEY, JSON.stringify(cartItems));
+    }
+  }, [cartItems, currentUser, isCartLoaded]);
+
 
   const totalItems = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const totalAmount = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -210,8 +234,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       removeFromCart,
       updateQuantity,
       clearCart,
-      loadCartFromFirestore,
-      mergeGuestCartToFirestore,
       totalItems,
       totalAmount,
       isCartLoaded,
