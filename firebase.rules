@@ -27,13 +27,18 @@ service cloud.firestore {
     // Users:
     match /users/{userId} {
       // A user can only create their own document.
-      allow create: if request.auth != null && request.auth.uid == userId;
-      // A user can read, update, and delete their own document.
+      // The document ID must match their UID, and the 'id' and 'email' fields in the document must also match.
+      allow create: if request.auth != null &&
+                       request.auth.uid == userId &&
+                       request.resource.data.id == request.auth.uid &&
+                       request.resource.data.email == request.auth.token.email;
+
+      // A user can read and update their own document.
       // An admin can also read and update any user document.
-      // (Admin delete of user accounts might be a separate, more careful operation, often via Admin SDK/Cloud Function)
       allow read, update: if request.auth != null && 
                                     (request.auth.uid == userId || request.auth.token.admin == true);
-      allow delete: if request.auth != null && request.auth.uid == userId; // User can delete own, admin delete needs consideration
+      // A user can delete their own document. (Admin delete might need more consideration for safety)
+      allow delete: if request.auth != null && request.auth.uid == userId;
       // Admins can list user documents.
       allow list: if request.auth != null && request.auth.token.admin == true; 
     }
@@ -56,14 +61,12 @@ service cloud.firestore {
     }
 
     // Settings: Publicly readable for general settings. Admins can write.
-    // Assumes 'general' is a common document ID for site-wide settings.
     match /settings/{settingId} {
-      allow read: if true; // Most settings might be public for the app to function
+      allow read: if true; 
       allow write: if request.auth != null && request.auth.token.admin == true;
     }
 
     // Fallback: Deny all other access by default for security.
-    // Any path not explicitly matched above will be denied.
     match /{document=**} {
       allow read, write: if false;
     }
