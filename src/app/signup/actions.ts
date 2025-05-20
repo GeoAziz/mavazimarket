@@ -4,46 +4,49 @@
 import * as admin from 'firebase-admin';
 import type { ServiceAccount } from 'firebase-admin';
 import { sendWelcomeEmail } from "@/lib/emailService";
+// NOTE: The path module is no longer needed here as we are not using file paths.
 
 interface SignupFormValues {
   fullName: string;
   email: string;
 }
 
+// Service account key JSON is now directly embedded here.
+// WARNING: This is generally NOT recommended for production due to security risks.
+// Ensure your codebase is private if using this method.
+// For production, configuring environment variables securely in your hosting environment is the standard.
+const serviceAccount: ServiceAccount = {
+  "type": "service_account",
+  "project_id": "mavazi-market",
+  "private_key_id": "c781dbd1ae300c8a536c2fe7160f6ce27918a81f",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQDHnAokBFSnfuL8\nd2LGnLGAQOUQ8gSsVFjalLaZXAux6s4/YTUxEZihv9LpBpFsUz2lqMdDxt0OW3Gg\nE3KSqLkfSPHDfBepWnZxGWw5KU4qekQLIUOXE61nW9D5BL3Ec3tgt9QK9FNOMOSW\nPSgtz3HYScpAoUXGTLGClpwyXRscvIK+VyKvQlSlGnA18ghwIq3DyzZIDVDIwAjo\nk98XMoRBFxAmcj8gJxP5KlrlyXlbQq9tygnGeh8PsCK4PuZHVOyztCBB625H4y4l\nGlyTDZXKmOF350ramFduVGi830cBLMi1LUQ1tXqhKwAjBexVo050sxQQLH5kDaPD\nyylXOUGZAgMBAAECgf9cEjLwlLl3iPpU+byAtZt/om9bzEaGNrcaxlMeP2wlj5O9\nfa52CRJziXJU33K0mgYVeNnGVDQi1eB+CyUOAPANk4KbaOHWe/j7XNP5NH7u7kv0\ngPjBoZHv2v9z3XwANu7x7dkg3xHjPyoxIoR7R58mOjh7Fz3X+gg8SWbtftoX+7YC\nUu2CBM5NqmUHQEHhvMvwTTwsfU5zkISwB4jTKn5a5qMXCoR/aOYZBAHqYToVhxrS\nL0S/KWVoLP7Fht6irHIhESDlt/hvocC5vey3JQtTJp3uvkrhTXbSMDkwT0m/KGFI\naR3XZABu0Q49Oy8Bt2ai2Y/Ge060N2usct1x9kECgYEA6XQuBqlegmYKnDZFMUBn\nRHP5ny0eZjAzYBHJX24rTGgwXcp9Js7X+1r7brG5RbK6JPnHRLQbHa9tAm01kP0w\nqJ0Se71TR3pmwaveNQd6ZNLB+bHGNije2Rs0cqf2Po+sf4Rzzbb5W2L8mxx8d3XZ\ntmRpHWiPg3aP9EKYXNx95aECgYEA2uMbVdasCeo2Pc7xDdH6njm+yTO9RtzCM5V3\n0LuQMXp2V1MUelVw7IUTahgfypct+vkTBBdmdtbNXXiyTvnVUhDSlfYzoMbCp1FR\n3qZX6awUdQ1u0fFK52ImjKj7gs+QRVgzoPJYA3EpLind/mKfsx8aBTKhUT5gVCWG\nLnLL6PkCgYB/7ZtfKSbSHCrKSW8HOzybpVXv5SCYbOdqSLTp54wwlZOTgeetAYIX\nilbn5NobGIKqynlo661ESiJZRxEof6ZPb6t2RVxCeg+fJ5hfxNZMM7X6J3HvsdvU\navUFs4bb541mX2W6H/9rFcZJFYYbTGhea42ygN7L8oeWGXw2vtj6oQKBgQCNi4dF\nvwiJcNeaqJPhKAQ1BYqGedrQVDmROfq9FE1ucY7NcYAwi8f2ayfe17LXQ2QMg7z0\nTF2KQ+WRqFdGEvELnK1RJGDGe0GtCT00CcWX6htghks/oBWcAzCCjVP3h1n4Pc1F\nKvIXZ7oFjDVuJ0C2iEo/SjpfW0LXp1xZ9Qo/oQKBgQCeDho842fz6igzOD7Jn0Vs\nAuY1EREX6Uc0UCL1X46VmiYWIe/9KCjpGDHbDqYdlcOrinFBOKtKRI2vWiOYQ2fw\n1/6UUlSvWVeJH31cTTU8Er759FeVHt8glcqDk46881HxVx4Ivkm9h8Y/7zWQolFE\nE//04mEEMu3uJgEQjSqFag==\n-----END PRIVATE KEY-----\n".replace(/\\n/g, '\n'), // Ensure newlines are correctly interpreted
+  "client_email": "firebase-adminsdk-fbsvc@mavazi-market.iam.gserviceaccount.com",
+  "client_id": "103851015213759963529",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-fbsvc%40mavazi-market.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+};
+
 // Helper function to initialize Firebase Admin SDK (Singleton pattern)
-// This function should only be called from within server actions.
 function initializeAdminApp(): admin.app.App {
   if (admin.apps.length > 0) {
-    // console.log("initializeAdminApp: Firebase Admin SDK already initialized. Returning existing app.");
+    console.log("handleUserSignupCompletion: Firebase Admin SDK already initialized. Returning existing app.");
     return admin.app(); // Return the already initialized app
   }
 
-  console.log("initializeAdminApp: Attempting to initialize Firebase Admin SDK.");
-  const serviceAccountEnvVar = process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON;
-
-  if (!serviceAccountEnvVar || serviceAccountEnvVar.trim() === '') {
-    console.error("CRITICAL ERROR: FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable is not set or is empty in initializeAdminApp.");
-    throw new Error("Admin SDK configuration environment variable missing.");
-  }
-
-  let serviceAccountJson: ServiceAccount;
-  try {
-    serviceAccountJson = JSON.parse(serviceAccountEnvVar);
-    // console.log("initializeAdminApp: Successfully parsed FIREBASE_ADMIN_SDK_CONFIG_JSON.");
-  } catch (e: any) {
-    console.error("CRITICAL ERROR: Failed to parse FIREBASE_ADMIN_SDK_CONFIG_JSON. Content might be invalid JSON.", e.message);
-    throw new Error("Admin SDK configuration JSON parsing error.");
-  }
-
+  console.log("handleUserSignupCompletion: Attempting to initialize Firebase Admin SDK with embedded credentials...");
   try {
     const app = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccountJson),
+      credential: admin.credential.cert(serviceAccount), // Use the embedded serviceAccount object
     });
-    console.log("initializeAdminApp: Firebase Admin SDK initialized successfully.");
+    console.log("Firebase Admin SDK initialized successfully in signup action using embedded credentials.");
     return app;
   } catch (e: any) {
-    console.error('CRITICAL ERROR: Firebase Admin SDK initializeApp() failed:', e.message);
-    throw new Error(`Admin SDK initialization failed with error: ${e.message}`);
+    console.error('CRITICAL ERROR: Firebase Admin SDK initializeApp() failed with embedded credentials:', e.message, e.stack);
+    // This error will be caught by the calling function's try...catch
+    throw new Error("Admin SDK initialization failed using embedded credentials.");
   }
 }
 
@@ -57,13 +60,13 @@ export async function handleUserSignupCompletion(
     const adminApp = initializeAdminApp(); // Ensure admin app is initialized
     const adminDb = adminApp.firestore();
 
-    console.log(`handleUserSignupCompletion: Attempting to create Firestore document for user ${userId}...`);
+    console.log(`handleUserSignupCompletion: Attempting to create Firestore document for user ${userId} using Admin SDK...`);
     const userDocRef = adminDb.collection("users").doc(userId);
     await userDocRef.set({
       id: userId,
       name: userData.fullName,
       email: userData.email,
-      role: 'user',
+      role: 'user', // Default role for new signups
       disabled: false,
       wishlist: [],
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -88,8 +91,7 @@ export async function handleUserSignupCompletion(
     return { success: true };
 
   } catch (error: any) {
-    console.error("Error in handleUserSignupCompletion:", error.message, error.stack);
-    // The error message from initializeAdminApp will propagate here if it throws
+    console.error("Error in handleUserSignupCompletion (after SDK init attempt):", error.message, error.stack);
     return { success: false, error: `Server Action Error: ${error.message || "Failed to complete signup due to internal server error."}` };
   }
 }
