@@ -4,59 +4,54 @@
 import * as admin from 'firebase-admin';
 import type { ServiceAccount } from 'firebase-admin';
 import { sendWelcomeEmail } from "@/lib/emailService";
-// path module is no longer needed as we are removing the file path fallback
-// import path from 'path';
+// No longer importing 'path' as we are removing the file system fallback
 
 interface SignupFormValues {
   fullName: string;
   email: string;
 }
 
-// Helper function to ensure Firebase Admin SDK is initialized only once
-function initializeAdminApp() {
+// Helper function to initialize Firebase Admin SDK (Singleton pattern)
+function initializeAdminApp(): admin.app.App {
+  console.log("initializeAdminApp: Attempting to initialize Firebase Admin SDK.");
   if (admin.apps.length > 0) {
-    // console.log("Firebase Admin SDK already initialized.");
+    console.log("initializeAdminApp: Firebase Admin SDK already initialized. Returning existing app.");
     return admin.app(); // Return the already initialized app
   }
 
-  console.log("handleUserSignupCompletion: Attempting to load service account from FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable.");
-  let serviceAccountJson: ServiceAccount | undefined;
+  console.log("initializeAdminApp: Checking for FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable.");
+  const serviceAccountEnvVar = process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON;
 
-  if (process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON && process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON.trim() !== '') {
-    try {
-      serviceAccountJson = JSON.parse(process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON) as ServiceAccount;
-      console.log("handleUserSignupCompletion: Successfully parsed FIREBASE_ADMIN_SDK_CONFIG_JSON.");
-    } catch (e) {
-      console.error("CRITICAL ERROR: Failed to parse FIREBASE_ADMIN_SDK_CONFIG_JSON. Content might be invalid JSON.", e);
-      throw new Error("Admin SDK configuration JSON parsing error.");
-    }
-  } else {
+  if (!serviceAccountEnvVar || serviceAccountEnvVar.trim() === '') {
     console.error("CRITICAL ERROR: FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable is not set or is empty.");
     throw new Error("Admin SDK configuration environment variable missing.");
   }
 
-  if (!serviceAccountJson) {
-    // This case should ideally not be reached if the above throws, but as a safeguard:
-    console.error("handleUserSignupCompletion: serviceAccountJson is undefined after attempting to load from env var.");
-    throw new Error("Service account JSON is undefined.");
+  let serviceAccountJson: ServiceAccount;
+  try {
+    serviceAccountJson = JSON.parse(serviceAccountEnvVar);
+    console.log("initializeAdminApp: Successfully parsed FIREBASE_ADMIN_SDK_CONFIG_JSON.");
+  } catch (e: any) {
+    console.error("CRITICAL ERROR: Failed to parse FIREBASE_ADMIN_SDK_CONFIG_JSON. Content might be invalid JSON.", e.message, e.stack);
+    throw new Error("Admin SDK configuration JSON parsing error.");
   }
 
   try {
     const app = admin.initializeApp({
       credential: admin.credential.cert(serviceAccountJson),
     });
-    console.log("Firebase Admin SDK initialized successfully by initializeAdminApp().");
+    console.log("initializeAdminApp: Firebase Admin SDK initialized successfully.");
     return app;
   } catch (e: any) {
     console.error('CRITICAL ERROR: Firebase Admin SDK initializeApp() failed:', e.message, e.stack);
+    // Check if it's an error about already being initialized, though the check above should prevent it.
     if (e.message.includes('already initialized')) {
-      console.warn("Admin SDK: Attempted to initialize when already initialized. Returning existing app.");
+      console.warn("initializeAdminApp: Attempted to initialize when already initialized, despite check. Returning existing app.");
       return admin.app();
     }
     throw new Error(`Admin SDK initialization failed with error: ${e.message}`);
   }
 }
-
 
 export async function handleUserSignupCompletion(
   userId: string,
@@ -65,45 +60,44 @@ export async function handleUserSignupCompletion(
   console.log("handleUserSignupCompletion action started for userId:", userId);
 
   try {
-    initializeAdminApp(); // Ensure admin app is initialized
-    const adminDb = admin.firestore(); // Get Firestore instance from the initialized app
+    const adminApp = initializeAdminApp(); // Ensure admin app is initialized
+    const adminDb = adminApp.firestore(); 
 
+    console.log(`handleUserSignupCompletion: Attempting to create Firestore document for user ${userId}...`);
     const userDocRef = adminDb.collection("users").doc(userId);
     await userDocRef.set({
       id: userId,
       name: userData.fullName,
       email: userData.email,
-      role: 'user',
-      disabled: false,
+      role: 'user', // Default role
+      disabled: false, // Default account status
       wishlist: [],
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    console.log(`User document created/updated for ${userId} using Admin SDK.`);
+    console.log(`User document created/updated for ${userId} in Firestore using Admin SDK.`);
 
+    // Send welcome email (this uses Nodemailer, separate from Admin SDK issues)
+    console.log(`handleUserSignupCompletion: Attempting to send welcome email to ${userData.email}...`);
     sendWelcomeEmail(userData.email, userData.fullName)
       .then(emailResult => {
         if (!emailResult.success) {
-          console.warn(`User ${userId} signed up, but welcome email failed:`, emailResult.error);
+          console.warn(`User ${userId} signed up, but welcome email failed to send:`, emailResult.error);
         } else {
           console.log(`Welcome email successfully queued for ${userData.email}`);
         }
       })
       .catch(emailError => {
-        console.warn(`User ${userId} signed up, but an error occurred while trying to send welcome email:`, emailError);
+        // This catch is for the promise of sendWelcomeEmail itself
+        console.error(`User ${userId} signed up, but an unhandled error occurred while trying to send welcome email:`, emailError);
       });
 
     return { success: true };
 
-  } catch (error) {
-    console.error("Error in handleUserSignupCompletion (Admin SDK operation or initialization):", error);
-    let errorMessage = "Failed to complete signup process due to an internal server error.";
-    if (error instanceof Error) {
-      // More specific error messages from the initializeAdminApp helper or Firestore operation
-      errorMessage = error.message; 
-    }
-    // Prepend a clear indicator for the client-side error reporting
-    return { success: false, error: `Server Action Error: ${errorMessage}` };
+  } catch (error: any) {
+    // This catch block is for errors from initializeAdminApp or Firestore operations with Admin SDK
+    console.error("Error in handleUserSignupCompletion (Admin SDK operation or initialization):", error.message, error.stack);
+    // Return the specific error message thrown by initializeAdminApp or a generic one
+    return { success: false, error: `Server Action Error: ${error.message || "Failed to complete signup due to internal server error."}` };
   }
 }
-    
