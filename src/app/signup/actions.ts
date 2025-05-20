@@ -4,7 +4,7 @@
 import * as admin from 'firebase-admin';
 import type { ServiceAccount } from 'firebase-admin';
 import { sendWelcomeEmail } from "@/lib/emailService";
-import path from 'path'; // For constructing absolute path in fallback
+import path from 'path'; // Ensure path is imported
 
 interface SignupFormValues {
   fullName: string;
@@ -17,28 +17,27 @@ if (!admin.apps.length) {
   let serviceAccountJson: ServiceAccount | undefined;
   const expectedServiceAccountFileName = 'mavazi-market-firebase-adminsdk-fbsvc-c781dbd1ae.json';
 
-  console.log("handleUserSignupCompletion (module scope): Checking for Admin SDK configuration...");
+  console.log("Admin SDK (module scope): Checking for Admin SDK configuration...");
 
   if (process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON && process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON.trim() !== '') {
-    console.log("handleUserSignupCompletion (module scope): Found FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable.");
+    console.log("Admin SDK (module scope): Found FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable.");
     try {
       serviceAccountJson = JSON.parse(process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON) as ServiceAccount;
-      console.log("handleUserSignupCompletion (module scope): Successfully parsed FIREBASE_ADMIN_SDK_CONFIG_JSON.");
+      console.log("Admin SDK (module scope): Successfully parsed FIREBASE_ADMIN_SDK_CONFIG_JSON.");
     } catch (e) {
       console.error("CRITICAL ERROR (module scope): Failed to parse FIREBASE_ADMIN_SDK_CONFIG_JSON. Content might be invalid JSON.", e);
       serviceAccountJson = undefined;
     }
   } else {
-    console.warn("handleUserSignupCompletion (module scope): FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable is not set or is empty.");
-    console.warn("handleUserSignupCompletion (module scope): Attempting fallback to require service account key file directly from project root...");
+    console.warn("Admin SDK (module scope): FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable is not set or is empty.");
+    console.warn("Admin SDK (module scope): Attempting fallback to require service account key file directly from project root...");
     try {
       const serviceAccountPath = path.join(process.cwd(), expectedServiceAccountFileName);
-      console.log(`handleUserSignupCompletion (module scope): Trying to require service account key from absolute path: ${serviceAccountPath}`);
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      serviceAccountJson = require(serviceAccountPath) as ServiceAccount;
-      console.log("handleUserSignupCompletion (module scope): Successfully required service account key file as fallback.");
+      console.log(`Admin SDK (module scope): Trying to require service account key from absolute path: ${serviceAccountPath}`);
+      serviceAccountJson = require(serviceAccountPath) as ServiceAccount; // Use the absolute path
+      console.log(`Admin SDK (module scope): Successfully required service account key file as fallback from: ${serviceAccountPath}`);
     } catch (fileError) {
-      console.error(`CRITICAL ERROR (module scope): Failed to require service account key file '${expectedServiceAccountFileName}' from project root as fallback. Ensure the file exists at the project root.`, fileError);
+      console.error(`CRITICAL ERROR (module scope): Failed to require service account key file '${expectedServiceAccountFileName}' from project root as fallback using path: ${path.join(process.cwd(), expectedServiceAccountFileName)}. Error:`, fileError);
       serviceAccountJson = undefined;
     }
   }
@@ -51,10 +50,15 @@ if (!admin.apps.length) {
       console.log("Firebase Admin SDK initialized successfully (module scope).");
     } catch (e: any) {
       console.error('CRITICAL ERROR (module scope): Firebase Admin SDK initialization failed:', e.message, e.stack);
-      // If initialization fails here, subsequent adminDb calls will fail.
+      // If it's "already initialized", that's okay, means another part of the code initialized it.
+      if (!e.message.includes('already initialized')) {
+        // Potentially problematic if this fails silently here, error might surface later
+      } else {
+        console.log("Admin SDK (module scope): Already initialized by another part of the application or a previous call.");
+      }
     }
   } else {
-    console.error("CRITICAL ERROR (module scope): Service account JSON is undefined. Firebase Admin SDK cannot be initialized at module scope.");
+    console.error("CRITICAL ERROR (module scope): Service account JSON is undefined. Firebase Admin SDK cannot be initialized at module scope. Ensure FIREBASE_ADMIN_SDK_CONFIG_JSON env var is set OR the key file is in the project root and readable.");
   }
 }
 
@@ -65,53 +69,57 @@ export async function handleUserSignupCompletion(
 ): Promise<{ success: boolean; error?: string }> {
 
   console.log("handleUserSignupCompletion action started for userId:", userId);
-
-  // Ensure Admin SDK is initialized (it might have been initialized at module scope or needs it now)
+  
+  // Ensure Admin SDK is initialized specifically for this function call if not done at module scope
   if (!admin.apps.length) {
-    console.warn("handleUserSignupCompletion action: Admin SDK not initialized at module scope, attempting again or configuration was faulty.");
-    // Re-attempt loading credentials logic here if it wasn't successful at module scope,
-    // or rely on the initial module scope attempt and fail if it wasn't set up.
-    // For robustness, let's include the check again, though it indicates a setup issue if module-scope init failed.
-    let serviceAccountJson: ServiceAccount | undefined;
-    const expectedServiceAccountFileName = 'mavazi-market-firebase-adminsdk-fbsvc-c781dbd1ae.json';
+    console.warn("handleUserSignupCompletion: Admin SDK not initialized at module scope, attempting initialization within action...");
+    let serviceAccountJsonInstance: ServiceAccount | undefined;
+    const expectedServiceAccountFileNameInstance = 'mavazi-market-firebase-adminsdk-fbsvc-c781dbd1ae.json';
 
     if (process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON && process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON.trim() !== '') {
+        console.log("handleUserSignupCompletion (action scope): Found FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable.");
         try {
-            serviceAccountJson = JSON.parse(process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON);
+            serviceAccountJsonInstance = JSON.parse(process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON);
+             console.log("handleUserSignupCompletion (action scope): Successfully parsed FIREBASE_ADMIN_SDK_CONFIG_JSON.");
         } catch (e) {
-            console.error("CRITICAL (action scope): Failed to parse FIREBASE_ADMIN_SDK_CONFIG_JSON.", e);
+            console.error("CRITICAL ERROR (action scope): Failed to parse FIREBASE_ADMIN_SDK_CONFIG_JSON.", e);
             return { success: false, error: "Admin SDK configuration JSON parsing error (action scope)." };
         }
     } else {
-        console.warn("CRITICAL (action scope): FIREBASE_ADMIN_SDK_CONFIG_JSON env var not set. Trying file fallback.");
+        console.warn("handleUserSignupCompletion (action scope): FIREBASE_ADMIN_SDK_CONFIG_JSON env var not set. Trying file fallback.");
         try {
-            const serviceAccountPath = path.join(process.cwd(), expectedServiceAccountFileName);
-            console.log(`handleUserSignupCompletion (action scope): Trying to require service account key from absolute path: ${serviceAccountPath}`);
-            serviceAccountJson = require(serviceAccountPath) as ServiceAccount;
+            const serviceAccountPathInstance = path.join(process.cwd(), expectedServiceAccountFileNameInstance);
+            console.log(`handleUserSignupCompletion (action scope): Trying to require service account key from absolute path: ${serviceAccountPathInstance}`);
+            serviceAccountJsonInstance = require(serviceAccountPathInstance) as ServiceAccount;
+            console.log(`handleUserSignupCompletion (action scope): Successfully required service account key file as fallback from: ${serviceAccountPathInstance}`);
         } catch (fileError) {
-            console.error(`CRITICAL (action scope): Failed to require service account key '${expectedServiceAccountFileName}' from project root as fallback.`, fileError);
-            return { success: false, error: "Admin SDK configuration file not found (action scope)." };
+            console.error(`CRITICAL ERROR (action scope): Failed to require service account key '${expectedServiceAccountFileNameInstance}' using path: ${path.join(process.cwd(), expectedServiceAccountFileNameInstance)}. Error:`, fileError);
+            // This is a likely point for the "Module not found" error if the path is still wrong or file missing
+            return { success: false, error: `Admin SDK configuration file not found at specified path. Attempted: ${path.join(process.cwd(), expectedServiceAccountFileNameInstance)}` };
         }
     }
 
-    if (serviceAccountJson) {
+    if (serviceAccountJsonInstance) {
         try {
-            admin.initializeApp({ credential: admin.credential.cert(serviceAccountJson) });
+            admin.initializeApp({ credential: admin.credential.cert(serviceAccountJsonInstance) });
             console.log("Firebase Admin SDK initialized successfully (action scope).");
         } catch (e: any) {
-            console.error('CRITICAL (action scope): Firebase Admin SDK initialization failed:', e.message);
-            return { success: false, error: "Admin SDK initialization failed with error (action scope)." };
+            console.error('CRITICAL ERROR (action scope): Firebase Admin SDK initialization failed:', e.message);
+            if (!e.message.includes('already initialized')) {
+                 return { success: false, error: "Admin SDK initialization failed with error (action scope)." };
+            } else {
+                 console.log("Admin SDK (action scope): Already initialized, proceeding.");
+            }
         }
     } else {
-        console.error("CRITICAL (action scope): Firebase Admin SDK cannot be initialized because serviceAccountJson is undefined.");
+        console.error("handleUserSignupCompletion (action scope): Firebase Admin SDK cannot be initialized because serviceAccountJsonInstance is undefined.");
         return { success: false, error: "Admin SDK not initialized due to missing/invalid configuration (action scope)." };
     }
   }
   
-  // Check again if apps array is populated after trying to initialize
   if (!admin.apps.length) {
-    console.error("handleUserSignupCompletion action: Firebase Admin SDK is STILL not initialized after attempts. Configuration is definitely missing or invalid.");
-    return { success: false, error: "Admin SDK critically failed to initialize. Check server logs for credential loading issues." };
+    console.error("handleUserSignupCompletion: Firebase Admin SDK is STILL not initialized after attempts. Configuration is definitely missing or invalid. Check server logs for credential loading issues (env var or file path/content).");
+    return { success: false, error: "Admin SDK critically failed to initialize. Check server logs." };
   }
 
   const adminDb = admin.firestore();
@@ -128,7 +136,7 @@ export async function handleUserSignupCompletion(
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
-    console.log(`User document created for ${userId} using Admin SDK.`);
+    console.log(`User document created/updated for ${userId} using Admin SDK.`);
 
     const emailResult = await sendWelcomeEmail(userData.email, userData.fullName);
     if (!emailResult.success) {
@@ -145,3 +153,5 @@ export async function handleUserSignupCompletion(
     return { success: false, error: errorMessage };
   }
 }
+
+  
