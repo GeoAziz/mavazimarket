@@ -1,37 +1,35 @@
+// lib/firebase-admin.ts
+
 import * as admin from "firebase-admin";
 
-function initializeAdminApp(): admin.app.App {
-  console.log("initializeAdminApp: Called.");
+let adminApp: admin.app.App | null = null;
 
-  if (admin.apps.length > 0) {
-    console.log("initializeAdminApp: Firebase Admin SDK already initialized.");
-    return admin.app();
+export function getAdminApp(): admin.app.App {
+  if (adminApp) {
+    return adminApp;
   }
 
-  console.log("initializeAdminApp: Initializing Firebase Admin SDK using environment credentials...");
-  
   if (!process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON) {
     throw new Error("Missing FIREBASE_ADMIN_SDK_CONFIG_JSON in environment variables.");
   }
 
   const serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON);
 
-  try {
-    const app = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    console.log("Firebase Admin SDK initialized successfully.");
-    return app;
-  } catch (error) {
-    // ✅ Fix TypeScript "unknown" error by casting `error` as `Error`
-    const err = error as Error;
-    console.error("ERROR: Firebase Admin SDK failed to initialize:", err.message);
-    throw new Error("Admin SDK initialization failed.");
-  }
+  adminApp = admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
+
+  return adminApp;
 }
 
-// ** Initialize the Admin App **
-export const adminApp = initializeAdminApp();
-export const auth = adminApp.auth();
-export const db = adminApp.firestore();
-export const storage = adminApp.storage();
+export function getAuth() {
+  return getAdminApp().auth();
+}
+
+export function getFirestore() {
+  return getAdminApp().firestore();
+}
+
+export function getStorage() {
+  return getAdminApp().storage();
+}
