@@ -23,7 +23,7 @@ const nextConfig: NextConfig = {
     // This prevents "Module not found" errors for 'child_process', 'fs', 'os'
     // often encountered with libraries like firebase-admin (via google-auth-library).
     if (isServer) {
-      config.externals = [...config.externals, 'child_process', 'fs', 'os'];
+      config.externals = [...(config.externals || []), 'child_process', 'fs', 'os'];
     }
 
     // Important: return the modified config
