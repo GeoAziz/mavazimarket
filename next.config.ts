@@ -38,20 +38,7 @@ const nextConfig: NextConfig = {
           'os': 'commonjs os',
           // You might need to add other Node.js built-ins here if similar errors appear for them
         },
-        // For certain environments, especially if using newer Node.js features or specific libraries,
-        // you might also need to ensure that some modules that are conditionally required by firebase-admin
-        // or its dependencies are handled. The following is a common set for firebase-admin.
-        // However, the 'commonjs <module>' approach above is usually more targeted for direct 'Module not found'.
-        // If the above doesn't work, you might also try simply adding them as strings like before,
-        // but the object notation is generally more precise for how they should be externalized.
-        // For now, focusing on the direct error source:
       ];
-
-      // An alternative or additional way for certain module types, if the above is not enough:
-      // config.module.rules.push({
-      //   test: /node_modules\/firebase-admin/,
-      //   loader: 'ignore-loader', // or handle specific sub-dependencies
-      // });
     }
 
     // Important: return the modified config
