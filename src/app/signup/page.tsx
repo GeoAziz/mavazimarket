@@ -1,4 +1,3 @@
-
 "use client";
 
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -15,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { UserPlus, Mail, KeyRound, User as UserIcon, Loader2 } from 'lucide-react';
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
-import { createUserWithEmailAndPassword, updateProfile as updateFirebaseAuthProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { handleUserSignupCompletion } from "./actions";
 
@@ -48,27 +47,24 @@ export default function SignupPage() {
   async function onSubmit(data: SignupFormValues) {
     setIsSubmitting(true);
     try {
-      // 1. Create user in Firebase Auth
       const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
       const user = userCredential.user;
 
-      // 2. Update Firebase Auth profile (displayName)
-      await updateFirebaseAuthProfile(user, { displayName: data.fullName });
+      await updateProfile(user, { 
+        displayName: data.fullName 
+      });
 
-      // 3. Call server action to create Firestore user doc and send welcome email
       const signupCompletionResult = await handleUserSignupCompletion(user.uid, {
         fullName: data.fullName,
         email: data.email,
       });
 
       if (!signupCompletionResult.success) {
-        // Log the error, but the user is already created in Auth.
-        // This might need more robust handling like queuing the email or manual follow-up.
         console.error("Error during signup completion (Firestore/Email):", signupCompletionResult.error);
         toast({
           title: "Account Created (with minor issue)",
           description: "Welcome! There was a small issue sending your welcome email, but your account is active.",
-          variant: "default", // Still a success for login
+          variant: "default",
         });
       } else {
         toast({
