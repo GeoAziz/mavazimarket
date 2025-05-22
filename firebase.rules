@@ -37,10 +37,16 @@ service cloud.firestore {
       // An admin can also read and update any user document.
       allow read, update: if request.auth != null && 
                                     (request.auth.uid == userId || request.auth.token.admin == true);
-      // A user can delete their own document. (Admin delete might need more consideration for safety)
+      // A user can delete their own document.
       allow delete: if request.auth != null && request.auth.uid == userId;
       // Admins can list user documents.
       allow list: if request.auth != null && request.auth.token.admin == true; 
+
+      // CartItems subcollection for each user
+      match /cartItems/{cartItemId} {
+        // User can read, create, update, and delete items in their own cart
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Orders:
@@ -66,7 +72,11 @@ service cloud.firestore {
       allow write: if request.auth != null && request.auth.token.admin == true;
     }
 
+    // REMOVED Unused top-level carts collection rule
+    // match /carts/{cartId} { ... }
+
     // Fallback: Deny all other access by default for security.
+    // Any path not explicitly matched above will be denied.
     match /{document=**} {
       allow read, write: if false;
     }
