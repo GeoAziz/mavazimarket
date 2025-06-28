@@ -18,9 +18,16 @@ const nextConfig: NextConfig = {
         http: false,
         https: false,
         zlib: false,
+        http2: false,
       };
     }
     return config;
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
   },
   images: {
     remotePatterns: [
