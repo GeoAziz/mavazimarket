@@ -21,7 +21,7 @@ This application is configured for easy deployment on [Vercel](https://vercel.co
 
 ### Vercel Environment Variables
 
-For the build and deployment to succeed, you **MUST** configure the following environment variables in your Vercel project settings. The build will fail with an `auth/invalid-api-key` error if these are not set.
+For the build and deployment to succeed, you **MUST** configure the following environment variables in your Vercel project settings. The build will succeed without them, but the live application will not be able to connect to Firebase or send emails.
 
 1.  **Client-Side Firebase Keys:** These are required for the frontend application to connect to your Firebase project.
     *   `NEXT_PUBLIC_FIREBASE_API_KEY`
