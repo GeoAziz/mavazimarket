@@ -4,44 +4,6 @@ Mavazi Market is a feature-rich, full-stack e-commerce web application built wit
 
 ![Mavazi Market Admin Dashboard](https://raw.githubusercontent.com/Mavazi-Market/mavazi-market-images/main/admin-dashboard.png)
 
-## Current Features
-
-### 🛍️ Storefront Experience
-- **Dynamic Homepage:** Features a hero banner, category highlights, and sections for "Featured Products" and "New Arrivals" fetched from the database.
-- **Advanced Category Pages:** Includes multi-faceted filtering (by subcategory, price range, color, size, brand, etc.) and sorting options.
-- **Detailed Product Pages:** Displays product information with an image carousel, variant selection (size, color), description, and specifications.
-- **AI Style Advisor:** A Genkit-powered feature that provides personalized style recommendations to users.
-- **Static Content Pages:** Includes "About Us," "Contact Us," "FAQ," and more.
-- **Responsive Design:** A beautiful, modern UI that works seamlessly across desktop and mobile devices.
-
-### 🛒 Shopping & Checkout
-- **Full-featured Shopping Cart:** State managed with React Context, supporting both guests (via localStorage) and logged-in users (via Firestore).
-- **Persistent Cart:** Guest carts are automatically merged into the user's account upon login.
-- **Complete Checkout Flow:** Multi-step process to capture user information, shipping address, and payment method selection.
-- **Order Processing:** Successfully creates detailed order documents in Firestore.
-- **Transactional Emails:** Automatically sends a welcome email on signup and a detailed order confirmation email upon purchase using Nodemailer.
-
-### 👤 User Authentication & Profiles
-- **Secure Authentication:** Complete signup, login, and "forgot password" flows using Firebase Authentication.
-- **User Profile Dashboard:** Allows users to:
-  - View their complete order history.
-  - Manage their personal wishlist.
-  - Update account settings and shipping information.
-  - Change their password securely.
-
-### ⚙️ Comprehensive Admin Panel
-- **Secure Dashboard:** A dedicated, route-protected admin area accessible only to users with an 'admin' role.
-- **Full CRUD Functionality:**
-  - **Products:** Create, read, update, and delete products, including managing images, variants, stock, and publishing status.
-  - **Categories:** Create, read, update, and delete categories and their associated subcategories.
-- **Data Management:**
-  - **Orders:** View a list of all orders with filtering and see detailed information for each order.
-  - **Customers:** View and manage a list of all registered users.
-- **Site Customization & Settings:**
-  - **Appearance:** Manage site-wide theme colors and homepage layout options. Changes are saved to Firestore and applied live to the storefront.
-  - **General Settings:** Update site name, contact information, and other global settings.
-- **Analytics:** An analytics dashboard that displays key metrics like total revenue and sales, with charts and date-range filtering.
-
 ## 🛠️ Tech Stack
 - **Framework:** Next.js 14+ (App Router)
 - **Language:** TypeScript
@@ -53,7 +15,32 @@ Mavazi Market is a feature-rich, full-stack e-commerce web application built wit
 - **Server-side Logic:** Next.js Server Actions
 - **Email:** Nodemailer
 
-## 🚀 Getting Started
+## 🚀 Deployment on Vercel
+
+This application is configured for easy deployment on [Vercel](https://vercel.com/). For a successful deployment, you **MUST** configure the environment variables in your Vercel project settings.
+
+### Vercel Environment Variables
+
+1.  Navigate to your project in the Vercel Dashboard.
+2.  Go to the **Settings** tab and click on **Environment Variables**.
+3.  Add the following variables:
+
+| Key                                   | Value                                                                                                                                                                                                                                                                                       | Description                               |
+| :------------------------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | :---------------------------------------- |
+| `NEXT_PUBLIC_FIREBASE_API_KEY`          | Your Firebase project's API Key.                                                                                                                                                                                                                                                            | Client-side key                           |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`      | Your Firebase project's Auth Domain.                                                                                                                                                                                                                                                        | Client-side key                           |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID`       | Your Firebase project's ID.                                                                                                                                                                                                                                                                 | Client-side key                           |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`   | Your Firebase project's Storage Bucket.                                                                                                                                                                                                                                                     | Client-side key                           |
+| `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`| Your Firebase project's Messaging Sender ID.                                                                                                                                                                                                                                                | Client-side key                           |
+| `NEXT_PUBLIC_FIREBASE_APP_ID`           | Your Firebase project's App ID.                                                                                                                                                                                                                                                             | Client-side key                           |
+| `FIREBASE_ADMIN_SDK_CONFIG_JSON`        | **IMPORTANT:** The **entire content** of your Firebase service account JSON file, pasted as a single line. All newline characters (`\n`) in the `private_key` must be escaped as `\\n`.                                                                                                           | Server-side key for Admin SDK             |
+| `GMAIL_EMAIL`                         | The Gmail address you are sending transactional emails from.                                                                                                                                                                                                                                | Server-side key for email                 |
+| `GMAIL_APP_PASSWORD`                  | The 16-character Google App Password for your `GMAIL_EMAIL` account.                                                                                                                                                                                                                        | Server-side key for email                 |
+| `NEXT_PUBLIC_APP_URL`                 | The full URL of your deployed application (e.g., `https://your-project.vercel.app`).                                                                                                                                                                                                       | Used for links in emails                  |
+
+After adding all variables, go to your **Deployments** tab and **redeploy** the latest commit to apply the changes.
+
+## 💻 Local Development
 
 ### Prerequisites
 - Node.js (v18 or later)
@@ -75,9 +62,8 @@ Mavazi Market is a feature-rich, full-stack e-commerce web application built wit
 
 3.  **Set up Environment Variables:**
     - Create a `.env.local` file in the project root.
-    - Populate it with your Firebase project credentials (for the client-side SDK) and your Gmail App Password for Nodemailer. Refer to `.env.example` for the required keys.
-    - **Important:** The `FIREBASE_ADMIN_SDK_CONFIG_JSON` variable is used by server actions and scripts. It should contain the **entire JSON content** of your Firebase service account key, formatted as a single-line string.
-
+    - Populate it with all the same keys listed above in the "Vercel Environment Variables" section. Refer to `.env.example` for the required keys.
+    
 4.  **Populate the Database:**
     - Place your Firebase Admin SDK service account key file in the project root. The script expects it to be named `mavazi-market-firebase-adminsdk-fbsvc-c781dbd1ae.json`.
     - Run the population script to seed your Firestore database with mock categories, products, and users (including an admin user).
@@ -101,4 +87,3 @@ The core application is complete. Future work would focus on integrating product
 -   [ ] **Implement Real Admin Actions:** Replace mocked admin actions (e.g., changing user roles, bulk updates) with secure Firebase Cloud Functions.
 -   [ ] **Server-Side Search:** Implement a robust search feature that queries the database directly instead of filtering on the client.
 -   [ ] **Add End-to-End Testing:** Implement a testing framework like Cypress or Playwright to ensure application reliability.
--   [ ] **Deployment:** Prepare and document the process for deploying to a platform like Vercel or Firebase Hosting.
