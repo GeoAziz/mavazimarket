@@ -1,7 +1,8 @@
+
 // Import the functions you need from the SDKs you need
-import { initializeApp, getApps } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeApp, getApps, FirebaseApp } from "firebase/app";
+import { getAuth, Auth } from "firebase/auth";
+import { getFirestore, Firestore } from "firebase/firestore";
 // TODO: Add SDKs for Firebase products that you want to use
 // https://firebase.google.com/docs/web/setup#available-libraries
 
@@ -15,9 +16,30 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID
 };
 
-// Initialize Firebase
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
-const auth = getAuth(app);
-const db = getFirestore(app);
+// Conditionally initialize Firebase to bypass build errors on Vercel.
+let app: FirebaseApp | null = null;
+let auth: Auth | null = null;
+let db: Firestore | null = null;
+
+if (firebaseConfig.apiKey) {
+  if (getApps().length === 0) {
+    try {
+      app = initializeApp(firebaseConfig);
+    } catch (e) {
+      console.error("Firebase initialization error", e);
+    }
+  } else {
+    app = getApps()[0];
+  }
+
+  if (app) {
+    auth = getAuth(app);
+    db = getFirestore(app);
+  }
+} else {
+  // This message will appear in the Vercel build logs if env vars are not set.
+  console.log("Firebase API key is missing. Skipping Firebase initialization during build.");
+}
+
 
 export { auth, db };

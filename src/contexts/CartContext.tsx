@@ -33,6 +33,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   const { currentUser } = useAuth(); // useAuth hook is called here
 
   const getCartCollectionRef = useCallback((userId: string) => {
+    if (!db) return null; // Guard against null db
     return collection(db, "users", userId, "cartItems");
   }, []);
 
@@ -41,6 +42,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     setIsCartLoaded(false);
     try {
       const cartColRef = getCartCollectionRef(userId);
+      if (!cartColRef) {
+        console.warn("CartContext: Firestore DB not available, cannot load cart.");
+        setIsCartLoaded(true);
+        return;
+      }
       const snapshot = await getDocs(cartColRef);
       const firestoreCartItems = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CartItem));
       setCartItems(firestoreCartItems);
@@ -54,7 +60,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
   
   const mergeGuestCartToFirestore = useCallback(async (userId: string) => {
     console.log("CartContext: Attempting to merge guest cart to Firestore for user:", userId);
-    if (typeof window === 'undefined') return;
+    const cartColRef = getCartCollectionRef(userId);
+    if (typeof window === 'undefined' || !cartColRef) {
+      console.warn("CartContext: Firestore DB not available or not in browser, cannot merge cart.");
+      return;
+    };
     const localCartData = localStorage.getItem(CART_LOCAL_STORAGE_KEY);
     if (!localCartData) {
       console.log("CartContext: No guest cart data to merge.");
@@ -68,8 +78,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      const cartColRef = getCartCollectionRef(userId);
-      const batch = writeBatch(db);
+      const batch = writeBatch(db!); // Use non-null assertion as we've checked for cartColRef
 
       const snapshot = await getDocs(cartColRef);
       const firestoreCartItemsMap = new Map(snapshot.docs.map(doc => [doc.id, doc.data() as CartItem]));
@@ -143,10 +152,13 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (currentUser) {
-        const itemToAddOrUpdate = newItems.find(item => item.id === cartItemId);
-        if (itemToAddOrUpdate) {
-          const itemDocRef = doc(getCartCollectionRef(currentUser.uid), itemToAddOrUpdate.id);
-          setDoc(itemDocRef, itemToAddOrUpdate, { merge: true }).catch(err => console.error("Error adding/updating item in Firestore cart:", err));
+        const cartColRef = getCartCollectionRef(currentUser.uid);
+        if (cartColRef) {
+          const itemToAddOrUpdate = newItems.find(item => item.id === cartItemId);
+          if (itemToAddOrUpdate) {
+            const itemDocRef = doc(cartColRef, itemToAddOrUpdate.id);
+            setDoc(itemDocRef, itemToAddOrUpdate, { merge: true }).catch(err => console.error("Error adding/updating item in Firestore cart:", err));
+          }
         }
       }
       return newItems;
@@ -157,7 +169,10 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     setCartItems(prevItems => {
       const newItems = prevItems.filter(item => item.id !== itemId);
       if (currentUser) {
-        deleteDoc(doc(getCartCollectionRef(currentUser.uid), itemId)).catch(err => console.error("Error removing item from Firestore cart:", err));
+        const cartColRef = getCartCollectionRef(currentUser.uid);
+        if (cartColRef) {
+            deleteDoc(doc(cartColRef, itemId)).catch(err => console.error("Error removing item from Firestore cart:", err));
+        }
       }
       return newItems;
     });
@@ -173,9 +188,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         item.id === itemId ? { ...item, quantity: newQuantity } : item
       );
       if (currentUser) {
-        const itemToUpdate = newItems.find(item => item.id === itemId);
-        if (itemToUpdate) {
-            setDoc(doc(getCartCollectionRef(currentUser.uid), itemId), itemToUpdate, {merge: true}).catch(err => console.error("Error updating quantity in Firestore cart:", err));
+        const cartColRef = getCartCollectionRef(currentUser.uid);
+        if (cartColRef) {
+          const itemToUpdate = newItems.find(item => item.id === itemId);
+          if (itemToUpdate) {
+              setDoc(doc(cartColRef, itemId), itemToUpdate, {merge: true}).catch(err => console.error("Error updating quantity in Firestore cart:", err));
+          }
         }
       }
       return newItems;
@@ -199,12 +217,14 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     if (currentUser) {
       try {
         const cartColRef = getCartCollectionRef(currentUser.uid);
-        const snapshot = await getDocs(cartColRef);
-        if (snapshot.docs.length > 0) {
-          const batch = writeBatch(db);
-          snapshot.docs.forEach(d => batch.delete(d.ref));
-          await batch.commit();
-          console.log("CartContext: Firestore cart cleared for user:", currentUser.uid);
+        if (cartColRef) {
+            const snapshot = await getDocs(cartColRef);
+            if (snapshot.docs.length > 0) {
+              const batch = writeBatch(db!);
+              snapshot.docs.forEach(d => batch.delete(d.ref));
+              await batch.commit();
+              console.log("CartContext: Firestore cart cleared for user:", currentUser.uid);
+            }
         }
       } catch (error) {
         console.error("CartContext: Error clearing Firestore cart:", error);

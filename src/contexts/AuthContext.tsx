@@ -34,6 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   // cartContext is no longer initialized at the top level here
 
   const fetchAppUser = useCallback(async (uid: string) => {
+    if (!db) return; // Guard against null db during build
     // Added useCallback for stability if passed as dependency
     try {
       const userDocRef = doc(db, "users", uid);
@@ -52,6 +53,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
 
   const mergeGuestWishlistToFirestore = useCallback(async (userId: string) => {
+    if (!db) return; // Guard against null db during build
     // Added useCallback
     if (typeof window === 'undefined') return;
     const guestWishlistData = localStorage.getItem(GUEST_WISHLIST_LOCAL_STORAGE_KEY);
@@ -74,6 +76,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [fetchAppUser]);
 
   useEffect(() => {
+    // If auth is null (which it will be during build if env vars are missing),
+    // don't try to attach a listener. Set loading to false and exit.
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setLoading(true);
       setError(null);
