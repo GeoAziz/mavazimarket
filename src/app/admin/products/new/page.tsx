@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { PlusCircle, UploadCloud, DollarSign, Package, Tag, Palette, Ruler, Layers, Loader2, ArrowLeft, Trash2 } from 'lucide-react';
+import { PlusCircle, UploadCloud, DollarSign, Package, Tag, Layers, Loader2, ArrowLeft, Trash2, Sparkles } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -26,24 +26,22 @@ const generateSlug = (name: string) => {
   return name
     .toLowerCase()
     .replace(/\s+/g, '-') 
-    .replace(/[^\w-]+/g, '');
+    .replace(/[^\w-]+/g, '') + '-' + Math.random().toString(36).substring(2, 7);
 };
 
 const productFormSchema = z.object({
-  name: z.string().min(3, "Product name must be at least 3 characters.").default(""),
-  description: z.string().min(10, "Description must be at least 10 characters.").default(""),
+  name: z.string().min(3, "Design name must be at least 3 characters.").default(""),
+  description: z.string().min(10, "The heritage story must be at least 10 characters.").default(""),
   price: z.coerce.number().positive("Price must be a positive number.").default(0),
-  category: z.string().min(1, "Category is required.").default(""),
+  category: z.string().min(1, "Selection of a collection is required.").default(""),
   subcategory: z.string().optional().default(""),
-  stockQuantity: z.coerce.number().int().min(0, "Stock can't be negative.").default(0),
-  sku: z.string().optional().default(""),
+  stockQuantity: z.coerce.number().int().min(0, "Stock levels cannot be negative.").default(0),
   brand: z.string().optional().default(""),
   material: z.string().optional().default(""),
   sizes: z.string().optional().default(""),
   colors: z.string().optional().default(""),
   tags: z.string().optional().default(""),
   isPublished: z.boolean().default(true),
-  dataAiHint: z.string().optional().default(""),
 });
 
 type ProductFormValues = z.infer<typeof productFormSchema>;
@@ -64,7 +62,7 @@ export default function AdminAddProductPage() {
         const catSnapshot = await getDocs(catCol);
         setCategories(catSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Category)));
       } catch (error) {
-        console.error("Error fetching categories: ", error);
+        console.error("Collection sync error:", error);
       }
     };
     fetchCategories();
@@ -74,56 +72,48 @@ export default function AdminAddProductPage() {
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: "", description: "", price: 0, category: "", subcategory: "",
-      stockQuantity: 0, sku: "", brand: "", material: "",
-      sizes: "", colors: "", tags: "", isPublished: true, dataAiHint: ""
+      stockQuantity: 0, brand: "Mavazi Heritage", material: "",
+      sizes: "", colors: "", tags: "new-arrival", isPublished: true
     },
   });
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const filesArray = Array.from(event.target.files);
-      
-      // Basic Validation
       const validFiles = filesArray.filter(file => {
         const isValidType = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
-        const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB
+        const isValidSize = file.size <= 5 * 1024 * 1024;
         return isValidType && isValidSize;
       });
 
       if (validFiles.length !== filesArray.length) {
-        toast({
-          title: "Invalid Media",
-          description: "Some files were rejected. Please use JPG/PNG/WebP under 5MB.",
-          variant: "destructive"
-        });
+        toast({ title: "Media Rejected", description: "JPG/PNG/WebP under 5MB only.", variant: "destructive" });
       }
 
-      setImageFiles(prevFiles => [...prevFiles, ...validFiles]);
+      setImageFiles(prev => [...prev, ...validFiles]);
       const newPreviews = validFiles.map(file => URL.createObjectURL(file));
-      setImagePreviews(prevPreviews => [...prevPreviews, ...newPreviews]);
+      setImagePreviews(prev => [...prev, ...newPreviews]);
     }
   };
 
   const removeImagePreview = (index: number) => {
-    setImageFiles(prevFiles => prevFiles.filter((_, i) => i !== index));
-    setImagePreviews(prevPreviews => {
-      const newPreviews = prevPreviews.filter((_, i) => i !== index);
-      URL.revokeObjectURL(prevPreviews[index]);
-      return newPreviews;
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
     });
   };
 
   async function onSubmit(data: ProductFormValues) {
     if (imageFiles.length === 0) {
-      toast({ title: "Visual Assets Required", description: "Every heritage piece needs a visual representation.", variant: "destructive" });
+      toast({ title: "Visual Assets Required", description: "Please upload at least one heritage image.", variant: "destructive" });
       return;
     }
 
     setIsSubmitting(true);
     try {
-      toast({ title: "Archiving Visuals...", description: "Securely transmitting heritage media to cloud storage." });
-      const uploadPromises = imageFiles.map(file => uploadImage(file, 'products'));
-      const imageUrls = await Promise.all(uploadPromises);
+      toast({ title: "Archiving Visuals...", description: "Securing high-resolution media in the cloud vault." });
+      const imageUrls = await Promise.all(imageFiles.map(file => uploadImage(file, 'products')));
       
       const slug = generateSlug(data.name);
       const productData = {
@@ -139,91 +129,80 @@ export default function AdminAddProductPage() {
         reviewCount: 0,
       };
 
-      if (!db) throw new Error("Logistics failure: Database not connected.");
-      await addDoc(collection(db, "products"), productData);
+      await addDoc(collection(db!, "products"), productData);
       
-      toast({ title: "Design Initialized!", description: `${data.name} is now live in the heritage collection.` });
-      form.reset(); 
-      setImageFiles([]);
-      setImagePreviews([]);
+      toast({ title: "Design Initialized!", description: `${data.name} is now live in the catalog.` });
       router.push('/admin/products'); 
     } catch (error: any) {
-      console.error("Error creating product: ", error);
-      toast({ title: "Initialization Failed", description: error.message || "An unexpected logistics error occurred.", variant: "destructive" });
+      toast({ title: "Initialization Failed", description: error.message, variant: "destructive" });
     }
     setIsSubmitting(false);
   }
 
   useEffect(() => {
-    return () => {
-      imagePreviews.forEach(url => URL.revokeObjectURL(url));
-    };
+    return () => imagePreviews.forEach(URL.revokeObjectURL);
   }, [imagePreviews]);
 
   return (
-    <div className="space-y-8">
-      <div className="flex items-center justify-between">
+    <div className="space-y-10 pb-24">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-heading text-secondary">New Heritage Design</h1>
-          <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Add to the command collection</p>
+          <h1 className="text-4xl font-heading text-secondary mb-1">Curation Center</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary">Add New Heritage Design</p>
         </div>
-        <Button variant="outline" className="border-secondary" asChild>
-            <Link href="/admin/products"><ArrowLeft className="mr-2 h-4 w-4"/> BACK TO CATALOG</Link>
+        <Button variant="outline" className="border-secondary h-12" asChild>
+            <Link href="/admin/products"><ArrowLeft className="mr-3 h-4 w-4"/> BACK TO CATALOG</Link>
         </Button>
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          <div className="grid lg:grid-cols-3 gap-8 items-start">
-            <div className="lg:col-span-2 space-y-6">
-              <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
-                <CardHeader className="bg-secondary text-background">
-                  <CardTitle className="text-xl font-heading flex items-center"><Package className="mr-3 text-primary"/>Design Identity</CardTitle>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
+          <div className="grid lg:grid-cols-12 gap-10">
+            <div className="lg:col-span-7 space-y-10">
+              <Card className="shadow-2xl border-none rounded-[2rem] overflow-hidden">
+                <CardHeader className="bg-secondary text-background p-10">
+                  <CardTitle className="text-2xl font-heading flex items-center"><Package className="mr-4 text-primary"/>Design Identity</CardTitle>
+                  <CardDescription className="text-background/60 tracking-widest uppercase text-[10px] font-bold mt-2">Core Heritage Attributes</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6 p-8">
+                <CardContent className="p-10 space-y-8">
                   <FormField control={form.control} name="name" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Product Name</FormLabel>
-                      <FormControl><Input placeholder="e.g. Mud Cloth Bomber Jacket" {...field} disabled={isSubmitting} /></FormControl>
+                      <FormControl><Input placeholder="e.g. Kitenge Heritage Wrap" {...field} disabled={isSubmitting} className="h-14 rounded-2xl border-2" /></FormControl>
                       <FormMessage />
-                    </FormItem>
-                  )} />
+                    </FormItem>)} />
                   <FormField control={form.control} name="description" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">The Heritage Story</FormLabel>
-                      <FormControl><Textarea placeholder="Describe the craftsmanship and soul of this piece..." {...field} rows={6} disabled={isSubmitting} /></FormControl>
+                      <FormControl><Textarea rows={8} placeholder="Describe the ancestral craftsmanship and modern utility..." {...field} disabled={isSubmitting} className="rounded-2xl border-2 resize-none" /></FormControl>
                       <FormMessage />
-                    </FormItem>
-                  )} />
+                    </FormItem>)} />
                 </CardContent>
               </Card>
 
-              <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
-                 <CardHeader className="bg-secondary text-background"><CardTitle className="text-xl font-heading flex items-center"><UploadCloud className="mr-3 text-primary"/>Visual Assets</CardTitle></CardHeader>
-                 <CardContent className="p-8">
+              <Card className="shadow-2xl border-none rounded-[2rem] overflow-hidden">
+                 <CardHeader className="p-10 border-b border-primary/5">
+                    <CardTitle className="text-2xl font-heading flex items-center text-secondary"><UploadCloud className="mr-4 text-primary"/>Media Archive</CardTitle>
+                    <CardDescription className="uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Add High-Resolution Visuals</CardDescription>
+                 </CardHeader>
+                 <CardContent className="p-10">
                     <FormItem>
-                      <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">High-Resolution Media</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="file" 
-                          multiple 
-                          accept="image/jpeg,image/png,image/webp"
-                          onChange={handleImageChange} 
-                          disabled={isSubmitting} 
-                          className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
-                        />
+                        <div className="relative">
+                          <Input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} disabled={isSubmitting} 
+                            className="block w-full text-sm text-slate-500 file:mr-6 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 h-16 rounded-2xl border-2 border-dashed border-primary/20 cursor-pointer pt-4"
+                          />
+                        </div>
                       </FormControl>
-                      <FormDescription className="text-[10px] uppercase tracking-tighter">JPG, PNG, WebP up to 5MB. First image defines storefront character.</FormDescription>
+                      <p className="text-[10px] uppercase tracking-tighter text-muted-foreground font-bold mt-4 italic">Recommended: 1600x2000px JPG/WebP. Max 5MB per asset.</p>
                     </FormItem>
                     {imagePreviews.length > 0 && (
-                      <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                        {imagePreviews.map((previewUrl, index) => (
-                          <div key={index} className="relative aspect-[3/4] rounded-xl overflow-hidden shadow-xl border-2 border-primary/5 group">
-                            <Image src={previewUrl} alt={`Preview ${index + 1}`} fill className="object-cover" />
+                      <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-6">
+                        {imagePreviews.map((url, index) => (
+                          <div key={index} className="relative aspect-[3/4] rounded-2xl overflow-hidden shadow-xl border-4 border-primary/5 group">
+                            <Image src={url} alt="Preview" fill className="object-cover" />
                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <Button type="button" variant="destructive" size="icon" className="rounded-full h-8 w-8" onClick={() => removeImagePreview(index)}>
-                                <Trash2 size={14} />
-                              </Button>
+                              <Button type="button" variant="destructive" size="icon" className="h-10 w-10 rounded-full" onClick={() => removeImagePreview(index)}><Trash2 size={18} /></Button>
                             </div>
                           </div>
                         ))}
@@ -231,85 +210,50 @@ export default function AdminAddProductPage() {
                     )}
                  </CardContent>
               </Card>
-
-              <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
-                <CardHeader className="bg-secondary text-background"><CardTitle className="text-xl font-heading flex items-center"><DollarSign className="mr-3 text-primary"/>Value & Logistics</CardTitle></CardHeader>
-                <CardContent className="grid md:grid-cols-2 gap-8 p-8">
-                   <FormField control={form.control} name="price" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Price (KSh)</FormLabel>
-                      <FormControl><Input type="number" placeholder="e.g. 12500" {...field} disabled={isSubmitting} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={form.control} name="stockQuantity" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Inventory Level</FormLabel>
-                      <FormControl><Input type="number" placeholder="e.g. 15" {...field} disabled={isSubmitting} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                </CardContent>
-              </Card>
             </div>
 
-            <div className="lg:col-span-1 space-y-6">
-              <Card className="shadow-2xl border-none rounded-2xl overflow-hidden bg-card">
-                <CardHeader className="bg-secondary text-background"><CardTitle className="text-xl font-heading flex items-center"><Layers className="mr-3 text-primary"/>Curation</CardTitle></CardHeader>
-                <CardContent className="space-y-6 p-8">
+            <div className="lg:col-span-5 space-y-10">
+              <Card className="shadow-2xl border-none rounded-[2rem] overflow-hidden sticky top-24">
+                <CardHeader className="p-10 border-b border-primary/5">
+                  <CardTitle className="text-2xl font-heading flex items-center text-secondary"><Sparkles size={24} className="mr-4 text-accent"/> Logistics & Curation</CardTitle>
+                </CardHeader>
+                <CardContent className="p-10 space-y-8">
                   <FormField control={form.control} name="category" render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Heritage Collection</FormLabel>
-                       <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting || categories.length === 0}>
-                        <FormControl><SelectTrigger className="border-primary/10"><SelectValue placeholder="Select collection" /></SelectTrigger></FormControl>
-                        <SelectContent>
-                          {categories.map(cat => (
-                            <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
+                       <Select onValueChange={field.onChange} value={field.value} disabled={isSubmitting}>
+                        <FormControl><SelectTrigger className="h-14 border-2 rounded-2xl"><SelectValue placeholder="Select collection..." /></SelectTrigger></FormControl>
+                        <SelectContent className="rounded-xl">{categories.map(cat => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}</SelectContent>
+                      </Select><FormMessage />
+                    </FormItem>)} />
+                   
+                   <div className="grid grid-cols-2 gap-6">
+                    <FormField control={form.control} name="price" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Price (KSh)</FormLabel>
+                        <FormControl><Input type="number" {...field} disabled={isSubmitting} className="h-14 rounded-2xl border-2" /></FormControl><FormMessage />
+                      </FormItem>)} />
+                    <FormField control={form.control} name="stockQuantity" render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Units Available</FormLabel>
+                        <FormControl><Input type="number" {...field} disabled={isSubmitting} className="h-14 rounded-2xl border-2" /></FormControl><FormMessage />
+                      </FormItem>)} />
+                   </div>
+
                    <FormField control={form.control} name="brand" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Artisan/Brand</FormLabel>
-                      <FormControl><Input placeholder="e.g. Rift Valley Weavers" {...field} disabled={isSubmitting} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
+                      <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Artisan / Designer</FormLabel>
+                      <FormControl><Input {...field} disabled={isSubmitting} className="h-14 rounded-2xl border-2" /></FormControl><FormMessage />
+                    </FormItem>)} />
+
+                   <div className="pt-4">
+                    <Button type="submit" className="w-full h-20 bg-primary text-white font-bold tracking-[0.3em] text-lg rounded-2xl shadow-2xl shadow-primary/20 transition-all active:scale-[0.98]" disabled={isSubmitting}>
+                      {isSubmitting ? <><Loader2 className="mr-4 h-8 w-8 animate-spin" /> ARCHIVING...</> : <><PlusCircle size={24} className="mr-4" /> INITIALIZE DESIGN</>}
+                    </Button>
+                   </div>
                 </CardContent>
               </Card>
-              <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
-                 <CardHeader className="bg-secondary text-background"><CardTitle className="text-xl font-heading flex items-center"><Tag className="mr-3 text-primary"/>Visibility</CardTitle></CardHeader>
-                 <CardContent className="space-y-4 p-8">
-                    <FormField control={form.control} name="isPublished" render={({ field }) => (
-                        <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 border-primary/5 p-4 bg-primary/5">
-                            <div className="space-y-0.5">
-                                <FormLabel className="text-secondary font-bold text-xs uppercase">Live on Storefront</FormLabel>
-                                <FormDescription className="text-[10px] uppercase tracking-tighter">Immediate shopper discovery</FormDescription>
-                            </div>
-                            <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} /></FormControl>
-                        </FormItem>
-                    )} />
-                 </CardContent>
-              </Card>
             </div>
-          </div>
-          
-          <div className="flex justify-end space-x-4 pt-8">
-            <Button type="button" variant="outline" className="border-secondary h-14 px-8" onClick={() => form.reset()} disabled={isSubmitting}>RESET DESIGN</Button>
-            <Button type="submit" className="bg-primary text-white h-14 px-12 text-lg font-bold tracking-widest shadow-xl shadow-primary/20" disabled={isSubmitting}>
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="mr-3 h-6 w-6 animate-spin" /> ARCHIVING...
-                </>
-              ) : (
-                <>
-                  <PlusCircle size={20} className="mr-3" /> PUBLISH HERITAGE
-                </>
-              )}
-            </Button>
           </div>
         </form>
       </Form>

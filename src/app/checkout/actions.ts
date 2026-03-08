@@ -2,7 +2,7 @@
 "use server";
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
 import type { CartItem, Address, Order } from '@/lib/types';
 import { sendOrderConfirmationEmail } from '@/lib/emailService';
 
@@ -24,17 +24,23 @@ interface PlaceOrderArgs {
 }
 
 /**
- * Professional Checkout & Order Creation
- * Handles real Firestore order document creation with full March 2026 lifecycle fields.
+ * placeOrderAction - The Core Revenue Generator
+ * 
+ * This function performs the "Hard Write" to Firestore. 
+ * It snapshots the current state of items to ensure price consistency even if the catalog changes.
  */
 export async function placeOrderAction(args: PlaceOrderArgs): Promise<{ success: boolean; orderId?: string; error?: string }> {
   const { userId, formData, cartItems, totalAmount } = args;
 
-  if (!db) return { success: false, error: "Database not connected" };
-  if (!cartItems || cartItems.length === 0) {
-    return { success: false, error: "Your bag is empty." };
+  if (!db) {
+    return { success: false, error: "Infrastructure Offline: Database not connected." };
   }
 
+  if (!cartItems || cartItems.length === 0) {
+    return { success: false, error: "Validation Failed: Your shopping bag is empty." };
+  }
+
+  // 1. Prepare Shipping Payload
   const shippingAddress: Address = {
     street: formData.address,
     city: formData.city,
@@ -43,49 +49,56 @@ export async function placeOrderAction(args: PlaceOrderArgs): Promise<{ success:
     phone: formData.phone
   };
 
-  // Build the rich order document according to the blueprint
-  const orderData: Omit<Order, 'id'> = {
+  // 2. Prepare Order Document
+  // Note: We snapshot items here so the order record remains accurate forever
+  const orderData = {
     userId: userId || 'guest_checkout',
-    orderDate: serverTimestamp(), 
-    status: 'Pending',
+    orderDate: serverTimestamp(),
+    status: 'Pending' as const,
     items: cartItems.map(item => ({
-        id: item.id,
-        productId: item.productId || item.id,
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        image: item.image,
-        size: item.size,
-        color: item.color,
-        slug: item.slug,
+      id: item.id,
+      productId: item.productId || item.id,
+      name: item.name,
+      price: item.price,
+      quantity: item.quantity,
+      image: item.image,
+      size: item.size || 'OS',
+      color: item.color || 'Default',
+      slug: item.slug || ''
     })),
     totalAmount,
     shippingAddress,
     paymentMethod: formData.paymentMethod,
-    // Add March 2026 placeholder fields for payment integration
-    mpesaTransactionId: formData.paymentMethod === 'mpesa' ? `MOCK-${Date.now()}` : undefined,
+    mpesaTransactionId: formData.paymentMethod === 'mpesa' ? `MAV-MPESA-${Date.now().toString().slice(-6)}` : undefined,
     updatedAt: serverTimestamp(),
   };
 
   try {
-    const docRef = await addDoc(collection(db, "orders"), orderData);
+    // 3. Persist to Firestore
+    const ordersRef = collection(db, "orders");
+    const docRef = await addDoc(ordersRef, orderData);
     
-    // Prepare serializable order object for email
+    // 4. Trigger Transactional Confirmation (Non-blocking)
     const confirmedOrderForEmail: Order = {
       ...orderData,
       id: docRef.id,
-      orderDate: new Date().toISOString(), 
+      orderDate: new Date().toISOString(), // String representation for the email template
       updatedAt: new Date().toISOString(),
-    };
+    } as any;
 
-    const emailResult = await sendOrderConfirmationEmail(formData.email, confirmedOrderForEmail, formData.fullName);
-    if (!emailResult.success) {
-      console.warn("Order placed, but heritage confirmation email failed:", emailResult.error);
-    }
-    
-    return { success: true, orderId: docRef.id };
-  } catch (error) {
-    console.error("Error placing order: ", error);
-    return { success: false, error: error instanceof Error ? error.message : "Logistics failure." };
+    // We don't await the email to ensure the user gets a fast redirect
+    sendOrderConfirmationEmail(formData.email, confirmedOrderForEmail, formData.fullName)
+      .catch(e => console.error("Transactional Email Failed:", e));
+
+    return { 
+      success: true, 
+      orderId: docRef.id 
+    };
+  } catch (error: any) {
+    console.error("Critical Logistics Failure during checkout:", error);
+    return { 
+      success: false, 
+      error: error.message || "A logistics error occurred while archiving your order. Our team has been notified." 
+    };
   }
 }

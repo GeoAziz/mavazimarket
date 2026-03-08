@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc, deleteDoc } from 'firebase/firestore';
 import { revalidatePath } from 'next/cache';
 
 interface SubmitReviewArgs {
@@ -11,6 +11,7 @@ interface SubmitReviewArgs {
   userName: string;
   rating: number;
   comment: string;
+  images?: string[];
   slug: string;
 }
 
@@ -20,7 +21,7 @@ interface SubmitReviewArgs {
  * Fulfills the real-time feedback loop requirement of the March 2026 blueprint.
  */
 export async function submitProductReviewAction(args: SubmitReviewArgs) {
-  const { productId, userId, userName, rating, comment, slug } = args;
+  const { productId, userId, userName, rating, comment, images, slug } = args;
 
   try {
     if (!db) throw new Error("Database not connected");
@@ -35,12 +36,12 @@ export async function submitProductReviewAction(args: SubmitReviewArgs) {
       userName,
       rating,
       comment,
+      images: images || [],
       date: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
 
     // 2. Real Logic for Updating Aggregate Rating
-    // We fetch the current state to perform an accurate weighted average calculation.
     const productSnap = await getDoc(productRef);
     if (productSnap.exists()) {
         const productData = productSnap.data();
@@ -61,6 +62,52 @@ export async function submitProductReviewAction(args: SubmitReviewArgs) {
     return { success: true };
   } catch (error: any) {
     console.error("Error submitting review:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * deleteProductReviewAction
+ * Administrative: Decommission a review and adjust the product's aggregate rating.
+ */
+export async function deleteProductReviewAction(args: { productId: string, reviewId: string, rating: number, slug: string }) {
+  const { productId, reviewId, rating, slug } = args;
+
+  try {
+    if (!db) throw new Error("Database not connected");
+
+    const productRef = doc(db, 'products', productId);
+    const reviewRef = doc(productRef, 'reviews', reviewId);
+
+    // 1. Delete the review doc
+    await deleteDoc(reviewRef);
+
+    // 2. Adjust parent aggregate rating
+    const productSnap = await getDoc(productRef);
+    if (productSnap.exists()) {
+      const productData = productSnap.data();
+      const currentRating = productData.averageRating || 0;
+      const currentCount = productData.reviewCount || 0;
+
+      const newCount = Math.max(0, currentCount - 1);
+      let newRating = 0;
+      
+      if (newCount > 0) {
+        // Reverse the weighted average calculation
+        newRating = ((currentRating * currentCount) - rating) / newCount;
+      }
+
+      await updateDoc(productRef, {
+        averageRating: Number(newRating.toFixed(1)),
+        reviewCount: newCount,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    revalidatePath(`/products/${slug}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error deleting review:", error);
     return { success: false, error: error.message };
   }
 }

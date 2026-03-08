@@ -2,13 +2,13 @@
 "use client";
 
 import { useParams, useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, UserCircle, MapPin, ShoppingBag, Edit3, Loader2, ShieldCheck, UserCog, Ban, CheckCircle } from 'lucide-react';
+import { ArrowLeft, UserCircle, MapPin, ShoppingBag, Edit3, Loader2, ShieldCheck, UserCog, Ban, CheckCircle, Mail, Sparkles, Send } from 'lucide-react';
 import type { User, Order, Address } from '@/lib/types';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
@@ -22,7 +22,18 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { updateCustomerRoleAction, toggleCustomerStatusAction } from './actions';
+import { updateCustomerRoleAction, toggleCustomerStatusAction, sendPromotionalOfferAction } from './actions';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const customerInfoFormSchema = z.object({
   name: z.string().min(2, "Name is too short.").default(""),
@@ -46,6 +57,7 @@ export default function AdminCustomerDetailPage() {
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [isSubmittingInfo, setIsSubmittingInfo] = useState(false);
   const [isAdminActionLoading, setIsAdminActionLoading] = useState(false);
+  const [isSendingOffer, setIsSendingOffer] = useState(false);
 
   const form = useForm<CustomerInfoFormValues>({
     resolver: zodResolver(customerInfoFormSchema),
@@ -58,7 +70,8 @@ export default function AdminCustomerDetailPage() {
     const fetchCustomerData = async () => {
       setLoading(true);
       try {
-        const customerDocRef = doc(db!, "users", customerId);
+        if (!db) return;
+        const customerDocRef = doc(db, "users", customerId);
         const customerSnap = await getDoc(customerDocRef);
         if (customerSnap.exists()) {
           const customerData = { id: customerSnap.id, ...customerSnap.data() } as User;
@@ -72,11 +85,11 @@ export default function AdminCustomerDetailPage() {
             country: customerData.shippingAddress?.country || "Kenya",
           });
         } else {
-          toast({ title: "Error", description: "Customer not found.", variant: "destructive" });
+          toast({ title: "Error", description: "Customer not found in archives.", variant: "destructive" });
           router.push("/admin/customers");
         }
 
-        const ordersQuery = query(collection(db!, "orders"), where("userId", "==", customerId), orderBy("orderDate", "desc"));
+        const ordersQuery = query(collection(db, "orders"), where("userId", "==", customerId), orderBy("orderDate", "desc"));
         const ordersSnapshot = await getDocs(ordersQuery);
         const fetchedOrders = ordersSnapshot.docs.map(d => {
             const data = d.data();
@@ -98,10 +111,10 @@ export default function AdminCustomerDetailPage() {
   }, [customerId, toast, router, form]);
 
   const handleInfoSubmit = async (data: CustomerInfoFormValues) => {
-    if (!customer) return;
+    if (!customer || !db) return;
     setIsSubmittingInfo(true);
     try {
-      const userDocRef = doc(db!, "users", customer.id);
+      const userDocRef = doc(db, "users", customer.id);
       const updatedData: Partial<User> = {
         name: data.name,
         phone: data.phone,
@@ -115,10 +128,10 @@ export default function AdminCustomerDetailPage() {
       };
       await updateDoc(userDocRef, updatedData);
       setCustomer(prev => prev ? { ...prev, ...updatedData, shippingAddress: updatedData.shippingAddress as Address } : null);
-      toast({ title: "Success", description: "Customer information updated." });
+      toast({ title: "Profile Refined", description: "Customer identity data has been synchronized." });
       setIsEditingInfo(false);
     } catch (error) {
-      toast({ title: "Error", description: "Failed to update profile.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to update heritage profile.", variant: "destructive" });
     }
     setIsSubmittingInfo(false);
   };
@@ -126,6 +139,7 @@ export default function AdminCustomerDetailPage() {
   const handleRoleChange = async (newRole: 'user' | 'admin') => {
     if (!customer) return;
     setIsAdminActionLoading(true);
+    toast({ title: "Syncing Access...", description: "Updating Firebase Auth claims via secure tunnel." });
     const result = await updateCustomerRoleAction(customer.id, newRole);
     if (result.success) {
       setCustomer(prev => prev ? { ...prev, role: newRole } : null);
@@ -139,17 +153,32 @@ export default function AdminCustomerDetailPage() {
   const handleAccountStatusToggle = async () => {
     if (!customer) return;
     setIsAdminActionLoading(true);
+    toast({ title: "Updating Status...", description: "Transmitting security state to Firebase Auth." });
     const result = await toggleCustomerStatusAction(customer.id, !!customer.disabled);
     if (result.success) {
       setCustomer(prev => prev ? { ...prev, disabled: result.newStatus } : null);
       toast({ 
         title: result.newStatus ? "Account Disabled" : "Account Enabled", 
-        description: `Security status updated for ${customer.name}.` 
+        description: `Logistics and sign-in status updated for ${customer.name}.` 
       });
     } else {
       toast({ title: "Action Failed", description: result.error, variant: "destructive" });
     }
     setIsAdminActionLoading(false);
+  };
+
+  const handleSendOffer = async () => {
+    if (!customer?.email) return;
+    setIsSendingOffer(true);
+    const offerCode = `MAVAZI-GIFT-${Math.floor(1000 + Math.random() * 9000)}`;
+    const result = await sendPromotionalOfferAction(customer.email, customer.name || 'Heritage Seeker', offerCode);
+    
+    if (result.success) {
+      toast({ title: "Offer Transmitted", description: `Engagement email sent to ${customer.email} via Resend.` });
+    } else {
+      toast({ title: "Engagement Failed", description: result.error, variant: "destructive" });
+    }
+    setIsSendingOffer(false);
   };
 
   if (loading) {
@@ -184,44 +213,64 @@ export default function AdminCustomerDetailPage() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-8 items-start">
-        <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
-          <CardHeader className="items-center text-center p-8 bg-secondary/5">
-            <div className="relative mb-4">
-              <Avatar className="h-32 w-32 border-4 border-primary/20 shadow-xl">
-                <AvatarImage src={customer.profilePictureUrl || customer.photoURL || `https://placehold.co/128x128.png?text=${customer.name?.charAt(0)}`} alt={customer.name} />
-                <AvatarFallback className="text-4xl bg-muted">{customer.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
-              </Avatar>
-              {customer.role === 'admin' && (
-                <div className="absolute -top-2 -right-2 bg-primary text-white p-2 rounded-full shadow-lg">
-                  <ShieldCheck size={20} />
-                </div>
-              )}
-            </div>
-            <CardTitle className="text-2xl font-heading text-secondary">{customer.name}</CardTitle>
-            <p className="text-sm text-muted-foreground">{customer.email}</p>
-            <div className="mt-6 flex flex-col w-full gap-3">
-                <Button className="w-full bg-primary text-white font-bold tracking-widest h-12" onClick={() => setIsEditingInfo(prev => !prev)}>
-                    <Edit3 size={16} className="mr-2" /> {isEditingInfo ? "CANCEL REFINEMENT" : "REFINE PROFILE"}
-                </Button>
-            </div>
-          </CardHeader>
-          <Separator className="bg-primary/5" />
-          <CardContent className="p-8 space-y-4">
-             <div className="flex items-center justify-between text-xs uppercase font-bold tracking-widest text-secondary/60">
-                <span>PLATFORM ROLE</span>
-                <Badge variant={customer.role === 'admin' ? "default" : "secondary"} className="rounded-sm">
-                  {customer.role || 'user'}
-                </Badge>
-            </div>
-             <div className="flex items-center justify-between text-xs uppercase font-bold tracking-widest text-secondary/60">
-                <span>LOGISTICS STATUS</span>
-                <Badge className={customer.disabled ? "bg-destructive text-white" : "bg-green-600 text-white"}>
-                  {customer.disabled ? 'DISABLED' : 'ACTIVE'}
-                </Badge>
-            </div>
-            <p className="text-[10px] text-muted-foreground pt-4 text-center">MEMBER SINCE: {customer.createdAt ? (typeof customer.createdAt === 'string' ? new Date(customer.createdAt) : (customer.createdAt as any).toDate()).toLocaleDateString() : 'N/A'}</p>
-          </CardContent>
-        </Card>
+        <div className="space-y-8">
+          <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
+            <CardHeader className="items-center text-center p-8 bg-secondary/5">
+              <div className="relative mb-4">
+                <Avatar className="h-32 w-32 border-4 border-primary/20 shadow-xl">
+                  <AvatarImage src={customer.photoURL || customer.profilePictureUrl || `https://placehold.co/128x128.png?text=${customer.name?.charAt(0)}`} alt={customer.name} />
+                  <AvatarFallback className="text-4xl bg-muted">{customer.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
+                </Avatar>
+                {customer.role === 'admin' && (
+                  <div className="absolute -top-2 -right-2 bg-primary text-white p-2 rounded-full shadow-lg">
+                    <ShieldCheck size={20} />
+                  </div>
+                )}
+              </div>
+              <CardTitle className="text-2xl font-heading text-secondary">{customer.name}</CardTitle>
+              <p className="text-sm text-muted-foreground">{customer.email}</p>
+              <div className="mt-6 flex flex-col w-full gap-3">
+                  <Button className="w-full bg-primary text-white font-bold tracking-widest h-12" onClick={() => setIsEditingInfo(prev => !prev)}>
+                      <Edit3 size={16} className="mr-2" /> {isEditingInfo ? "CANCEL REFINEMENT" : "REFINE PROFILE"}
+                  </Button>
+              </div>
+            </CardHeader>
+            <Separator className="bg-primary/5" />
+            <CardContent className="p-8 space-y-4">
+               <div className="flex items-center justify-between text-xs uppercase font-bold tracking-widest text-secondary/60">
+                  <span>PLATFORM ROLE</span>
+                  <Badge variant={customer.role === 'admin' ? "default" : "secondary"} className="rounded-sm">
+                    {customer.role || 'user'}
+                  </Badge>
+              </div>
+               <div className="flex items-center justify-between text-xs uppercase font-bold tracking-widest text-secondary/60">
+                  <span>LOGISTICS STATUS</span>
+                  <Badge className={customer.disabled ? "bg-destructive text-white" : "bg-green-600 text-white"}>
+                    {customer.disabled ? 'DISABLED' : 'ACTIVE'}
+                  </Badge>
+              </div>
+              <p className="text-[10px] text-muted-foreground pt-4 text-center">MEMBER SINCE: {customer.createdAt ? (typeof customer.createdAt === 'string' ? new Date(customer.createdAt) : (customer.createdAt as any).toDate()).toLocaleDateString() : 'N/A'}</p>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-2xl border-none rounded-2xl overflow-hidden bg-accent/5">
+            <CardHeader className="bg-accent text-secondary p-6">
+              <CardTitle className="text-lg font-heading flex items-center"><Sparkles size={20} className="mr-2" /> Heritage Engagement</CardTitle>
+            </CardHeader>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-xs text-muted-foreground leading-relaxed">Transmit a special 15% discount code to this customer's registered email via Resend.</p>
+              <Button 
+                variant="outline" 
+                className="w-full border-accent text-accent hover:bg-accent hover:text-secondary font-bold"
+                onClick={handleSendOffer}
+                disabled={isSendingOffer || !!customer.disabled}
+              >
+                {isSendingOffer ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Send size={16} className="mr-2" />}
+                SEND GIFT CODE
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="lg:col-span-2 space-y-8">
           {isEditingInfo && (
@@ -279,17 +328,35 @@ export default function AdminCustomerDetailPage() {
                 </div>
 
                 <div className="pt-4">
-                  <Button 
-                      variant={customer.disabled ? "outline" : "destructive"} 
-                      onClick={handleAccountStatusToggle}
-                      disabled={isAdminActionLoading}
-                      className="w-full h-14 font-bold tracking-[0.2em] shadow-xl"
-                  >
-                      {isAdminActionLoading ? <Loader2 className="animate-spin mr-2" /> : customer.disabled ? <CheckCircle size={20} className="mr-2"/> : <Ban size={20} className="mr-2"/>}
-                      {customer.disabled ? 'RECLAIM ACCOUNT (ENABLE)' : 'DECOMMISSION ACCOUNT (DISABLE)'}
-                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                          variant={customer.disabled ? "outline" : "destructive"} 
+                          disabled={isAdminActionLoading}
+                          className="w-full h-14 font-bold tracking-[0.2em] shadow-xl"
+                      >
+                          {isAdminActionLoading ? <Loader2 className="animate-spin mr-2" /> : customer.disabled ? <CheckCircle size={20} className="mr-2"/> : <Ban size={20} className="mr-2"/>}
+                          {customer.disabled ? 'RECLAIM ACCOUNT (ENABLE)' : 'DECOMMISSION ACCOUNT (DISABLE)'}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="border-none rounded-2xl">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="font-heading text-2xl text-secondary">{customer.disabled ? 'Re-enable Account?' : 'Confirm Decommission?'}</AlertDialogTitle>
+                        <AlertDialogDescription className="text-muted-foreground leading-relaxed">
+                          This will {customer.disabled ? 'restore' : 'terminate'} the user's ability to sign in to Mavazi Market. This action is synchronized across the Firebase Auth Tunnel.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="mt-6">
+                        <AlertDialogCancel className="rounded-xl h-12">Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleAccountStatusToggle} className={`rounded-xl h-12 font-bold ${customer.disabled ? 'bg-green-600' : 'bg-destructive'}`}>
+                          CONFIRM SYNC
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  
                   <p className="text-[10px] text-center text-muted-foreground uppercase font-bold tracking-tighter mt-4">
-                    Note: These actions are synchronized with Firebase Auth & Firestore Identity Tunnels.
+                    Note: Using Firebase Admin SDK Server Actions for elevated security compliance.
                   </p>
                 </div>
             </CardContent>

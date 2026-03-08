@@ -1,3 +1,4 @@
+
 rules_version = '2';
 
 service cloud.firestore {
@@ -44,6 +45,11 @@ service cloud.firestore {
       
       // Cart items sub-collection
       match /cartItems/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+
+      // Address book sub-collection
+      match /addresses/{addressId} {
         allow read, write: if isOwner(userId);
       }
     }

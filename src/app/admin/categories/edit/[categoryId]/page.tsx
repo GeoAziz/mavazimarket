@@ -4,11 +4,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm, useFieldArray } from "react-hook-form";
 import * as z from "zod";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Save, Trash2, Layers, Loader2, ArrowLeft, PlusCircle, UploadCloud } from 'lucide-react';
+import { Save, Trash2, Layers, Loader2, ArrowLeft, PlusCircle, UploadCloud, ShieldCheck } from 'lucide-react';
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { useEffect, useState, use } from "react"; 
@@ -115,6 +115,10 @@ export default function AdminEditCategoryPage({ params: paramsPromise }: EditCat
         toast({ title: "Invalid Media", description: "JPG, PNG or WebP only.", variant: "destructive" });
         return;
       }
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ title: "File Too Large", description: "Maximum size is 5MB.", variant: "destructive" });
+        return;
+      }
       setImageFile(file);
       if (imagePreview) URL.revokeObjectURL(imagePreview);
       setImagePreview(URL.createObjectURL(file));
@@ -136,7 +140,7 @@ export default function AdminEditCategoryPage({ params: paramsPromise }: EditCat
     try {
       let finalImageUrl = existingImageUrl;
       if (imageFile) {
-        toast({ title: "Syncing Visual...", description: "Archiving new heritage asset." });
+        toast({ title: "Archiving Visual...", description: "Securely transmitting heritage asset to the cloud vault." });
         finalImageUrl = await uploadImage(imageFile, 'categories');
       }
 
@@ -173,82 +177,94 @@ export default function AdminEditCategoryPage({ params: paramsPromise }: EditCat
 
   if (isLoadingCategory) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-10 w-3/5 rounded-xl" /><Skeleton className="h-64 w-full rounded-2xl" /><Skeleton className="h-48 w-full rounded-2xl" />
+      <div className="space-y-10">
+        <Skeleton className="h-14 w-3/5 rounded-2xl" /><Skeleton className="h-[500px] w-full rounded-[2rem]" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6 pb-24">
-      <div className="flex items-center justify-between">
+    <div className="space-y-10 pb-24">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-heading text-secondary">Refine Collection</h1>
-          <p className="text-[10px] uppercase tracking-widest font-bold text-primary">{categoryToEdit?.name}</p>
+          <h1 className="text-4xl font-heading text-secondary mb-1">Refine Collection</h1>
+          <p className="text-[10px] uppercase tracking-[0.3em] font-bold text-primary">IDENTITY ARCHIVE: {categoryToEdit?.name}</p>
         </div>
-        <Button variant="outline" className="border-secondary" asChild><Link href="/admin/categories"><ArrowLeft className="mr-2 h-4 w-4"/>BACK</Link></Button>
+        <Button variant="outline" className="border-secondary h-12" asChild><Link href="/admin/categories"><ArrowLeft className="mr-3 h-4 w-4"/> BACK TO ARCHIVE</Link></Button>
       </div>
 
       <Form {...form}>
-        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-          <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
-            <CardHeader className="bg-secondary text-background">
-              <CardTitle className="font-heading text-xl flex items-center"><Layers className="mr-2 text-primary" />Root Identity</CardTitle>
-            </CardHeader>
-            <CardContent className="p-8 space-y-6">
-              <FormField control={form.control} name="name" render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Collection Name</FormLabel>
-                  <FormControl><Input {...field} disabled={isSubmitting} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )} />
-              
-              <FormItem>
-                <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50 flex items-center"><UploadCloud className="mr-2" size={14}/>Update Visual Asset</FormLabel>
-                <FormControl>
-                  <Input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} disabled={isSubmitting}
-                    className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
-                  />
-                </FormControl>
-              </FormItem>
-
-              {(imagePreview || existingImageUrl) && (
-                <div className="mt-2 relative group w-64 aspect-video border-2 border-primary/5 rounded-xl overflow-hidden shadow-md">
-                  <Image src={imagePreview || existingImageUrl!} alt="Preview" fill className="object-cover" />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                    <Button type="button" variant="destructive" size="icon" className="rounded-full" onClick={removeImage}><Trash2 size={16} /></Button>
+        <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-10">
+          <div className="grid lg:grid-cols-12 gap-10">
+            <div className="lg:col-span-7 space-y-10">
+              <Card className="shadow-2xl border-none rounded-[2rem] overflow-hidden">
+                <CardHeader className="bg-secondary text-background p-10">
+                  <CardTitle className="font-heading text-2xl flex items-center"><Layers className="mr-4 text-primary" />Root Identity</CardTitle>
+                  <CardDescription className="text-background/60 tracking-widest uppercase text-[10px] font-bold mt-2">Manage Core Taxonomy Details</CardDescription>
+                </CardHeader>
+                <CardContent className="p-10 space-y-8">
+                  <FormField control={form.control} name="name" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Collection Name</FormLabel>
+                      <FormControl><Input {...field} disabled={isSubmitting} className="h-14 rounded-2xl border-2" /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  
+                  <div className="space-y-4">
+                    <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50 flex items-center"><UploadCloud className="mr-3" size={16}/>Update Visual Asset</FormLabel>
+                    <FormControl>
+                      <Input type="file" accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} disabled={isSubmitting}
+                        className="block w-full text-sm text-slate-500 file:mr-6 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 h-16 rounded-2xl border-2 border-dashed border-primary/20 cursor-pointer pt-4"
+                      />
+                    </FormControl>
                   </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
 
-          <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
-            <CardHeader><CardTitle className="font-heading text-xl">Branch Management</CardTitle></CardHeader>
-            <CardContent className="p-8 pt-0">
-              {fields.map((field, index) => (
-                <div key={field.id} className="grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-4 items-end border-2 border-primary/5 p-6 rounded-xl mb-4 bg-primary/5">
-                   <FormField control={form.control} name={`subcategories.${index}.name`} render={({ field: subField }) => (
-                    <FormItem><FormLabel className="text-[10px] uppercase font-bold text-secondary/40">Branch Name</FormLabel><FormControl><Input {...subField} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <FormField control={form.control} name={`subcategories.${index}.priceRange`} render={({ field: subField }) => (
-                    <FormItem><FormLabel className="text-[10px] uppercase font-bold text-secondary/40">Price Range</FormLabel><FormControl><Input {...subField} disabled={isSubmitting} /></FormControl><FormMessage /></FormItem>
-                  )} />
-                  <Button type="button" variant="destructive" size="icon" className="rounded-full h-10 w-10" onClick={() => remove(index)} disabled={isSubmitting}><Trash2 size={18} /></Button>
-                </div>
-              ))}
-              <Button type="button" variant="outline" className="mt-4 border-dashed border-2 h-16 w-full text-primary font-bold tracking-widest" onClick={() => append({ id: '', name: "", slug: "", priceRange: "KSh 0 - KSh 0" })} disabled={isSubmitting}>
-                <PlusCircle size={18} className="mr-2"/> ADD BRANCH
-              </Button>
-            </CardContent>
-          </Card>
-          
-          <div className="flex justify-end pt-8">
-            <Button type="submit" className="bg-primary text-white h-14 px-12 text-lg font-bold tracking-widest shadow-xl shadow-primary/20" disabled={isSubmitting}>
-              {isSubmitting ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save size={20} className="mr-2" />}
-              {isSubmitting ? "SYNCING..." : "SYNC COLLECTION"}
-            </Button>
+                  {(imagePreview || existingImageUrl) && (
+                    <div className="mt-6 relative aspect-video w-full rounded-3xl overflow-hidden shadow-2xl group border-4 border-primary/5">
+                      <Image src={imagePreview || existingImageUrl!} alt="Preview" fill className="object-cover" />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button type="button" variant="destructive" size="icon" className="h-14 w-14 rounded-full shadow-2xl" onClick={removeImage}><Trash2 size={28} /></Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-5">
+              <Card className="shadow-2xl border-none rounded-[2rem] overflow-hidden sticky top-24">
+                <CardHeader className="p-10 border-b border-primary/5">
+                  <CardTitle className="font-heading text-2xl flex items-center"><PlusCircle size={20} className="mr-3 text-primary" /> Branch Management</CardTitle>
+                  <CardDescription className="uppercase text-[10px] font-bold tracking-widest text-muted-foreground">Manage classification nodes</CardDescription>
+                </CardHeader>
+                <CardContent className="p-10 pt-6 space-y-6 max-h-[500px] overflow-y-auto custom-scrollbar">
+                  {fields.map((field, index) => (
+                    <div key={field.id} className="p-6 border-2 border-primary/5 rounded-3xl bg-primary/5 space-y-4 animate-in fade-in slide-in-from-top-2 relative">
+                       <FormField control={form.control} name={`subcategories.${index}.name`} render={({ field: subField }) => (
+                        <FormItem><FormLabel className="text-[10px] uppercase font-bold text-secondary/40">Branch Name</FormLabel><FormControl><Input {...subField} disabled={isSubmitting} className="h-12 rounded-xl bg-white border-none shadow-sm" /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name={`subcategories.${index}.priceRange`} render={({ field: subField }) => (
+                        <FormItem><FormLabel className="text-[10px] uppercase font-bold text-secondary/40">Price Range</FormLabel><FormControl><Input {...subField} disabled={isSubmitting} className="h-12 rounded-xl bg-white border-none shadow-sm" /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <Button type="button" variant="destructive" size="icon" className="absolute top-4 right-4 h-8 w-8 rounded-full" onClick={() => remove(index)} disabled={isSubmitting}><Trash2 size={14} /></Button>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" className="mt-4 border-dashed border-2 h-20 w-full text-primary font-bold tracking-widest rounded-3xl hover:bg-primary/5" onClick={() => append({ id: '', name: "", slug: "", priceRange: "KSh 0 - KSh 0" })} disabled={isSubmitting}>
+                    <PlusCircle size={20} className="mr-3"/> ADD BRANCH
+                  </Button>
+                </CardContent>
+                <CardFooter className="p-10 pt-0">
+                  <Button type="submit" className="w-full h-16 bg-primary text-white text-lg font-bold tracking-[0.2em] rounded-2xl shadow-xl shadow-primary/20 transition-all active:scale-[0.98]" disabled={isSubmitting}>
+                    {isSubmitting ? <><Loader2 className="mr-4 h-6 w-6 animate-spin" /> SYNCING ARCHIVE...</> : <><Save size={24} className="mr-4" /> SYNC COLLECTION</>}
+                  </Button>
+                </CardFooter>
+              </Card>
+              <div className="p-8 bg-card border-2 border-primary/5 rounded-3xl mt-10 flex items-center gap-4">
+                <ShieldCheck className="text-green-600 h-8 w-8 shrink-0" />
+                <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground leading-relaxed">Changes to collection taxonomy are instantly reflected in the storefront discovery engine.</p>
+              </div>
+            </div>
           </div>
         </form>
       </Form>

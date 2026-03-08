@@ -15,7 +15,7 @@ export type Product = {
   brand?: string;
   stockQuantity: number;
   averageRating?: number;
-  reviewCount?: number; // Added for accurate rating aggregation
+  reviewCount?: number; 
   slug: string;
   tags?: string[]; 
   dataAiHint?: string; 
@@ -56,25 +56,30 @@ export type CartItem = {
 
 export type User = {
   id: string; 
+  uid: string;
   name: string;
   email: string;
-  phone?: string; // Added phone
+  phone?: string; 
+  photoURL?: string;
   profilePictureUrl?: string;
   shippingAddress?: Address;
   wishlist?: string[]; 
   role?: 'user' | 'admin'; 
-  disabled?: boolean; // For account status
+  disabled?: boolean; 
   createdAt?: Timestamp | string;
   updatedAt?: Timestamp | string;
   dataAiHint?: string;
 };
 
 export type Address = {
+  id?: string;
+  label?: string;
   street: string;
   city: string;
   postalCode: string;
   country: string;
-  phone?: string; // Optional phone for shipping address
+  phone?: string; 
+  isPrimary?: boolean;
 };
 
 export type Order = {
@@ -98,6 +103,7 @@ export type Review = {
   userName: string;
   rating: number; 
   comment: string;
+  images?: string[]; 
   date: Timestamp | string; 
   updatedAt?: Timestamp | string;
 };

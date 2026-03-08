@@ -26,7 +26,7 @@ const GUEST_WISHLIST_LOCAL_STORAGE_KEY = 'mavaziGuestWishlist';
 
 export function ProductCard({ product, onOpenQuickView }: ProductCardProps) {
   const { toast } = useToast();
-  const { currentUser, appUser } = useAuth();
+  const { currentUser, appUser, fetchAppUser } = useAuth();
   const { addToCart } = useCart();
   const [isInWishlist, setIsInWishlist] = useState(false);
   const [isWishlistLoading, setIsWishlistLoading] = useState(false);
@@ -71,6 +71,8 @@ export function ProductCard({ product, onOpenQuickView }: ProductCardProps) {
           toast({ title: "Saved", description: "Added to your wishlist." });
           setIsInWishlist(true);
         }
+        // Refresh local context state to reflect changes instantly on profile tabs
+        await fetchAppUser(currentUser.uid);
       } catch (error) {
         console.error("Wishlist error:", error);
       }

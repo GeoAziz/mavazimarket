@@ -12,27 +12,30 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { Heart, HelpCircle, Ruler, Send, ShoppingCart, Star, Truck, Loader2 } from 'lucide-react';
+import { Heart, HelpCircle, Send, ShoppingCart, Star, Truck, Loader2, Trash2, Camera, Plus } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import React from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
-import { submitProductReviewAction } from './review-actions';
+import { submitProductReviewAction, deleteProductReviewAction } from './review-actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { uploadImage } from '@/lib/storage';
+import Image from 'next/image';
 
 interface ProductPageProps {
   params: Promise<{ productId: string }>;
 }
 
+const REVIEWS_PER_PAGE = 5;
+
 export default function ProductPage({ params }: ProductPageProps) {
   const { productId: slug } = use(params);
-  const { currentUser, appUser } = useAuth();
+  const { currentUser, appUser, isAdmin } = useAuth();
   const { addToCart } = useCart();
   const { toast } = useToast();
 
@@ -40,8 +43,14 @@ export default function ProductPage({ params }: ProductPageProps) {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [deletingReviewId, setDeletingReviewId] = useState<string | null>(null);
+  const [reviewLimit, setReviewLimit] = useState(REVIEWS_PER_PAGE);
+  const [hasMoreReviews, setHasMoreMoreReviews] = useState(false);
+
   const [userRating, setUserRating] = useState(5);
   const [userComment, setUserComment] = useState("");
+  const [reviewImages, setReviewImages] = useState<File[]>([]);
+  const [reviewImagePreviews, setReviewImagePreviews] = useState<string[]>([]);
 
   useEffect(() => {
     if (!slug || !db) return;
@@ -49,8 +58,6 @@ export default function ProductPage({ params }: ProductPageProps) {
     const fetchProductAndReviews = async () => {
       setLoading(true);
       try {
-        // In a real app, doc ID might be random or slug. 
-        // Our current setup often uses slug as doc ID or has it as a field.
         const docRef = doc(db, "products", slug);
         const docSnap = await getDoc(docRef);
         
@@ -58,9 +65,9 @@ export default function ProductPage({ params }: ProductPageProps) {
           const productData = { id: docSnap.id, ...docSnap.data() } as Product;
           setProduct(productData);
           
-          // Listen for real-time reviews
+          // Listen for real-time reviews with limit
           const reviewsRef = collection(db, "products", docSnap.id, "reviews");
-          const revQuery = query(reviewsRef, orderBy("date", "desc"), limit(10));
+          const revQuery = query(reviewsRef, orderBy("date", "desc"), limit(reviewLimit));
           const unsubscribe = onSnapshot(revQuery, (snapshot) => {
             const fetchedReviews = snapshot.docs.map(d => ({
               id: d.id,
@@ -68,6 +75,7 @@ export default function ProductPage({ params }: ProductPageProps) {
               date: d.data().date?.toDate?.()?.toISOString() || new Date().toISOString()
             } as Review));
             setReviews(fetchedReviews);
+            setHasMoreMoreReviews(snapshot.docs.length === reviewLimit);
           });
           return () => unsubscribe();
         }
@@ -78,12 +86,29 @@ export default function ProductPage({ params }: ProductPageProps) {
     };
 
     fetchProductAndReviews();
-  }, [slug]);
+  }, [slug, reviewLimit]);
 
   const handleAddToCart = () => {
     if (!product) return;
     addToCart(product, 1);
     toast({ title: "Joined Collection", description: `${product.name} added to your bag.` });
+  };
+
+  const handleReviewImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      setReviewImages(prev => [...prev, ...files]);
+      const previews = files.map(file => URL.createObjectURL(file));
+      setReviewImagePreviews(prev => [...prev, ...previews]);
+    }
+  };
+
+  const removeReviewImagePreview = (index: number) => {
+    setReviewImages(prev => prev.filter((_, i) => i !== index));
+    setReviewImagePreviews(prev => {
+      URL.revokeObjectURL(prev[index]);
+      return prev.filter((_, i) => i !== index);
+    });
   };
 
   const handleReviewSubmit = async (e: React.FormEvent) => {
@@ -95,28 +120,51 @@ export default function ProductPage({ params }: ProductPageProps) {
     if (!userComment.trim()) return;
 
     setSubmittingReview(true);
-    const result = await submitProductReviewAction({
+    try {
+      // 1. Upload review images if any
+      const imageUrls = await Promise.all(reviewImages.map(file => uploadImage(file, 'reviews')));
+
+      // 2. Submit review
+      const result = await submitProductReviewAction({
+        productId: product.id,
+        userId: currentUser.uid,
+        userName: appUser?.name || "Anonymous",
+        rating: userRating,
+        comment: userComment,
+        images: imageUrls,
+        slug: product.slug
+      });
+
+      if (result.success) {
+        toast({ title: "Review Shared", description: "Thank you for your feedback!" });
+        setUserComment("");
+        setReviewImages([]);
+        setReviewImagePreviews([]);
+        setUserRating(5);
+      } else {
+        toast({ title: "Error", description: result.error, variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Upload Failed", description: error.message, variant: "destructive" });
+    }
+    setSubmittingReview(false);
+  };
+
+  const handleDeleteReview = async (review: Review) => {
+    if (!product || !isAdmin) return;
+    setDeletingReviewId(review.id);
+    const result = await deleteProductReviewAction({
       productId: product.id,
-      userId: currentUser.uid,
-      userName: appUser?.name || "Anonymous",
-      rating: userRating,
-      comment: userComment,
+      reviewId: review.id,
+      rating: review.rating,
       slug: product.slug
     });
-
     if (result.success) {
-      toast({ title: "Review Shared", description: "Thank you for your feedback!" });
-      setUserComment("");
-      // Force a re-fetch of the product to get the new averageRating and reviewCount
-      const docRef = doc(db!, "products", product.id);
-      const updatedSnap = await getDoc(docRef);
-      if (updatedSnap.exists()) {
-        setProduct({ id: updatedSnap.id, ...updatedSnap.data() } as Product);
-      }
+      toast({ title: "Review Removed", description: "The review has been decommissioned." });
     } else {
       toast({ title: "Error", description: result.error, variant: "destructive" });
     }
-    setSubmittingReview(false);
+    setDeletingReviewId(null);
   };
 
   if (loading && !product) {
@@ -218,21 +266,55 @@ export default function ProductPage({ params }: ProductPageProps) {
               {reviews.length > 0 ? (
                 <div className="space-y-6">
                   {reviews.map(review => (
-                    <div key={review.id} className="p-6 border-2 border-primary/5 rounded-2xl bg-card hover:border-primary/10 transition-all">
-                      <div className="flex items-center mb-4">
+                    <div key={review.id} className="p-6 border-2 border-primary/5 rounded-2xl bg-card hover:border-primary/10 transition-all relative group/review">
+                      <div className="flex items-start mb-4">
                         <Avatar className="h-12 w-12 mr-4 border-2 border-primary/10">
                            <AvatarImage src={`https://placehold.co/48x48.png?text=${review.userName.charAt(0)}`} alt={review.userName} />
                            <AvatarFallback>{review.userName.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1">
-                          <p className="font-bold text-secondary">{review.userName}</p>
-                          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{new Date(review.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="font-bold text-secondary">{review.userName}</p>
+                              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{new Date(review.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                            </div>
+                            <ReviewStars rating={review.rating} size={3} showReviewCount={false}/>
+                          </div>
                         </div>
-                        <ReviewStars rating={review.rating} size={3} showReviewCount={false}/>
                       </div>
-                      <p className="text-muted-foreground leading-relaxed italic">"{review.comment}"</p>
+                      <p className="text-muted-foreground leading-relaxed italic mb-4">"{review.comment}"</p>
+                      
+                      {review.images && review.images.length > 0 && (
+                        <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
+                          {review.images.map((img, i) => (
+                            <div key={i} className="relative h-20 w-20 rounded-lg overflow-hidden border border-primary/5 flex-shrink-0">
+                              <Image src={img} alt="Review attachment" fill className="object-cover" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {isAdmin && (
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          className="absolute bottom-4 right-4 text-destructive opacity-0 group-hover/review:opacity-100 transition-opacity"
+                          onClick={() => handleDeleteReview(review)}
+                          disabled={deletingReviewId === review.id}
+                        >
+                          {deletingReviewId === review.id ? <Loader2 className="animate-spin h-4 w-4" /> : <Trash2 size={16} />}
+                        </Button>
+                      )}
                     </div>
                   ))}
+                  
+                  {hasMoreReviews && (
+                    <div className="pt-4 text-center">
+                      <Button variant="outline" onClick={() => setReviewLimit(prev => prev + REVIEWS_PER_PAGE)} className="rounded-full px-8">
+                        LOAD MORE VOICES
+                      </Button>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="py-12 text-center border-4 border-dashed border-primary/5 rounded-3xl">
@@ -272,6 +354,25 @@ export default function ProductPage({ params }: ProductPageProps) {
                       className="resize-none rounded-xl border-2 border-primary/5 focus-visible:ring-primary"
                     />
                   </div>
+
+                  <div className="space-y-3">
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-secondary/50 flex items-center gap-2">
+                      <Camera size={14} /> Attach Heritage Visuals
+                    </Label>
+                    <div className="flex flex-wrap gap-2">
+                      {reviewImagePreviews.map((url, i) => (
+                        <div key={i} className="relative h-16 w-16 rounded-md overflow-hidden border border-primary/10">
+                          <Image src={url} alt="Preview" fill className="object-cover" />
+                          <button onClick={() => removeReviewImagePreview(i)} className="absolute top-0 right-0 bg-destructive text-white p-0.5"><Trash2 size={10}/></button>
+                        </div>
+                      ))}
+                      <label className="h-16 w-16 rounded-md border-2 border-dashed border-primary/10 flex items-center justify-center cursor-pointer hover:bg-primary/5 transition-colors">
+                        <Plus size={20} className="text-primary/40" />
+                        <input type="file" multiple accept="image/*" className="hidden" onChange={handleReviewImageChange} />
+                      </label>
+                    </div>
+                  </div>
+
                   <Button 
                     className="w-full h-14 bg-primary text-white font-bold tracking-widest"
                     disabled={submittingReview || !currentUser}

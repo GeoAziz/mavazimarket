@@ -1,6 +1,6 @@
 
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
 import type { CartItem, Product } from '@/lib/types';
 
 interface CartState {
@@ -8,15 +8,24 @@ interface CartState {
   addToCart: (product: Product, quantity: number, selectedSize?: string, selectedColor?: string) => void;
   removeFromCart: (itemId: string) => void;
   updateQuantity: (itemId: string, newQuantity: number) => void;
+  setCartItems: (items: CartItem[]) => void;
   clearCart: () => void;
   totalItems: () => number;
   totalAmount: () => number;
 }
 
+/**
+ * useCartStore - High-Fidelity Cart Management
+ * Uses Zustand with 'persist' middleware to ensure the shopping bag
+ * survives page refreshes via localStorage.
+ */
 export const useCartStore = create<CartState>()(
   persist(
     (set, get) => ({
       cartItems: [],
+      
+      setCartItems: (items) => set({ cartItems: items }),
+
       addToCart: (product, quantity, selectedSize, selectedColor) => {
         const cartItemId = `${product.id}${selectedSize ? `-${selectedSize}` : ''}${selectedColor ? `-${selectedColor}` : ''}`;
         const items = get().cartItems;
@@ -42,18 +51,20 @@ export const useCartStore = create<CartState>()(
                 quantity,
                 image: product.images[0],
                 slug: product.slug,
-                size: selectedSize,
-                color: selectedColor,
+                size: selectedSize || 'OS',
+                color: selectedColor || 'Default',
               },
             ],
           });
         }
       },
+
       removeFromCart: (itemId) => {
         set({
           cartItems: get().cartItems.filter((item) => item.id !== itemId),
         });
       },
+
       updateQuantity: (itemId, newQuantity) => {
         if (newQuantity < 1) {
           get().removeFromCart(itemId);
@@ -65,12 +76,15 @@ export const useCartStore = create<CartState>()(
           ),
         });
       },
+
       clearCart: () => set({ cartItems: [] }),
+
       totalItems: () => get().cartItems.reduce((sum, item) => sum + item.quantity, 0),
       totalAmount: () => get().cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
     }),
     {
-      name: 'mavazi-cart-storage',
+      name: 'mavazi-cart-storage', // Key for localStorage
+      storage: createJSONStorage(() => localStorage),
     }
   )
 );

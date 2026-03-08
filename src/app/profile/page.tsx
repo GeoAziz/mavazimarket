@@ -7,14 +7,14 @@ import * as z from "zod";
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { Order, Product, User as AppUserType, Address } from '@/lib/types';
+import type { Order, Product, Address } from '@/lib/types';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
-import { Edit3, History, Heart, Settings, LogOut, Package, MapPin, Mail, KeyRound, Bell, ShoppingCart as ShoppingCartIcon, Loader2, UploadCloud, Trash2 } from 'lucide-react';
+import { Edit3, History, Heart, Settings, LogOut, Package, MapPin, Mail, KeyRound, Loader2, UploadCloud, Trash2, Plus, ShieldCheck, ShoppingBag } from 'lucide-react';
 import { ProductCard } from '@/components/products/ProductCard';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useState, useEffect, useCallback } from 'react'; 
@@ -22,7 +22,7 @@ import { QuickViewModal } from '@/components/products/QuickViewModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { auth, db } from '@/lib/firebase';
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential, updateProfile } from 'firebase/auth';
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy as firestoreOrderBy } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy as firestoreOrderBy, addDoc, deleteDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { uploadImage } from "@/lib/storage";
@@ -34,6 +34,7 @@ const profileFormSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileFormSchema>;
 
 const addressFormSchema = z.object({
+  label: z.string().min(2, "Label required (e.g. Home, Work)").default("Home"),
   street: z.string().min(5, "Street address is too short.").default(""),
   city: z.string().min(2, "City name is too short.").default(""),
   postalCode: z.string().optional().default(""),
@@ -59,8 +60,10 @@ export default function ProfilePage() {
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [wishlistProducts, setWishlistProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [addresses, setAddresses] = useState<Address[]>([]);
   const [loadingWishlist, setLoadingWishlist] = useState(false);
   const [loadingOrders, setLoadingOrders] = useState(false);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
 
   const [isProfileSubmitting, setIsProfileSubmitting] = useState(false);
   const [isAddressSubmitting, setIsAddressSubmitting] = useState(false);
@@ -73,7 +76,7 @@ export default function ProfilePage() {
   });
   const addressForm = useForm<AddressFormValues>({
     resolver: zodResolver(addressFormSchema),
-    defaultValues: { street: '', city: '', postalCode: '', country: 'Kenya' },
+    defaultValues: { label: 'Home', street: '', city: '', postalCode: '', country: 'Kenya' },
   });
   const passwordForm = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema),
@@ -86,9 +89,8 @@ export default function ProfilePage() {
     }
     if (appUser) {
       profileForm.reset({ name: appUser.name || "" });
-      addressForm.reset(appUser.shippingAddress || { street: '', city: '', postalCode: '', country: 'Kenya' });
     }
-  }, [currentUser, appUser, authLoading, router, profileForm, addressForm]);
+  }, [currentUser, appUser, authLoading, router, profileForm]);
 
   const fetchWishlist = useCallback(async () => {
     if (currentUser && appUser?.wishlist && appUser.wishlist.length > 0) {
@@ -137,10 +139,29 @@ export default function ProfilePage() {
     }
   }, [currentUser]);
 
+  const fetchAddresses = useCallback(async () => {
+    if (currentUser) {
+      setLoadingAddresses(true);
+      try {
+        const addrRef = collection(db!, "users", currentUser.uid, "addresses");
+        const snapshot = await getDocs(addrRef);
+        const fetched = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as Address));
+        setAddresses(fetched);
+      } catch (error) {
+        console.error("Error fetching addresses:", error);
+      } finally {
+        setLoadingAddresses(false);
+      }
+    }
+  }, [currentUser]);
+
   useEffect(() => {
-    fetchWishlist();
-    fetchOrders();
-  }, [fetchWishlist, fetchOrders]);
+    if (currentUser) {
+      fetchWishlist();
+      fetchOrders();
+      fetchAddresses();
+    }
+  }, [currentUser, fetchWishlist, fetchOrders, fetchAddresses]);
 
   const handlePhotoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (!currentUser || !event.target.files?.[0]) return;
@@ -150,10 +171,7 @@ export default function ProfilePage() {
       const file = event.target.files[0];
       const photoURL = await uploadImage(file, 'users/profiles');
       
-      // Update Auth Profile
       await updateProfile(currentUser, { photoURL });
-      
-      // Update Firestore Profile
       await updateDoc(doc(db!, "users", currentUser.uid), { photoURL, updatedAt: new Date().toISOString() });
       
       await fetchAppUser(currentUser.uid);
@@ -183,13 +201,26 @@ export default function ProfilePage() {
     if (!currentUser) return;
     setIsAddressSubmitting(true);
     try {
-      await updateDoc(doc(db!, "users", currentUser.uid), { shippingAddress: data, updatedAt: new Date().toISOString() });
-      await fetchAppUser(currentUser.uid);
-      toast({ title: "Logistics Updated", description: "Your primary shipping destination has been saved." });
+      const addrRef = collection(db!, "users", currentUser.uid, "addresses");
+      await addDoc(addrRef, { ...data, isPrimary: addresses.length === 0 });
+      await fetchAddresses();
+      addressForm.reset();
+      toast({ title: "Address Saved", description: "Your logistics destination has been added." });
     } catch (error) {
-      toast({ title: "Update Failed", description: "Could not save address details.", variant: "destructive" });
+      toast({ title: "Update Failed", description: "Could not save address details. Check security rules.", variant: "destructive" });
     } finally {
       setIsAddressSubmitting(false);
+    }
+  }
+
+  async function deleteAddress(addressId: string) {
+    if (!currentUser) return;
+    try {
+      await deleteDoc(doc(db!, "users", currentUser.uid, "addresses", addressId));
+      await fetchAddresses();
+      toast({ title: "Address Removed", description: "Destination cleared from Address Book." });
+    } catch (e) {
+      toast({ title: "Error", description: "Could not delete address.", variant: "destructive" });
     }
   }
 
@@ -216,7 +247,7 @@ export default function ProfilePage() {
       await auth?.signOut();
       router.push('/login');
     } catch (error) {
-      toast({ title: "Error", description: "Failed to decommissioning session.", variant: "destructive"});
+      toast({ title: "Error", description: "Failed to decommission session.", variant: "destructive"});
     }
   };
 
@@ -245,7 +276,7 @@ export default function ProfilePage() {
             <div className="flex flex-col md:flex-row items-center gap-6">
               <div className="relative group">
                 <Avatar className="h-32 w-32 border-4 border-primary/20 shadow-xl">
-                  <AvatarImage src={appUser.photoURL || `https://placehold.co/128x128.png?text=${appUser.name?.charAt(0)}`} alt={appUser.name} />
+                  <AvatarImage src={appUser.photoURL || appUser.profilePictureUrl || `https://placehold.co/128x128.png?text=${appUser.name?.charAt(0)}`} alt={appUser.name} />
                   <AvatarFallback className="text-4xl bg-muted">{appUser.name?.charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
@@ -395,8 +426,12 @@ export default function ProfilePage() {
                               )}
                             />
                             <FormItem>
-                              <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Email (Protected)</FormLabel>
+                              <div className="flex items-center justify-between mb-1">
+                                <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Email (Identity Anchor)</FormLabel>
+                                <ShieldCheck size={14} className="text-green-600" />
+                              </div>
                               <FormControl><Input value={currentUser.email || ''} disabled className="rounded-xl h-12 bg-secondary/5" /></FormControl>
+                              <p className="text-[10px] text-muted-foreground italic">Email is protected. Change requests are handled by support advisors.</p>
                             </FormItem>
                             <Button type="submit" className="w-full bg-primary text-white h-14 rounded-xl font-bold tracking-widest shadow-xl shadow-primary/20" disabled={isProfileSubmitting}>
                                {isProfileSubmitting ? <Loader2 className="animate-spin" /> : "SYNC IDENTITY"}
@@ -408,39 +443,58 @@ export default function ProfilePage() {
 
                     <Card className="shadow-xl border-none rounded-2xl overflow-hidden bg-card">
                        <CardHeader className="bg-secondary text-background">
-                         <CardTitle className="text-xl font-heading flex items-center"><MapPin size={20} className="mr-3 text-primary"/>Logistics Profile</CardTitle>
+                         <CardTitle className="text-xl font-heading flex items-center"><MapPin size={20} className="mr-3 text-primary"/>Address Book</CardTitle>
                        </CardHeader>
-                      <CardContent className="p-8">
+                      <CardContent className="p-8 space-y-8">
+                        {loadingAddresses ? (
+                          <div className="space-y-4">
+                            <Skeleton className="h-16 w-full" /><Skeleton className="h-16 w-full" />
+                          </div>
+                        ) : addresses.length > 0 ? (
+                          <div className="space-y-4">
+                            {addresses.map(addr => (
+                              <div key={addr.id} className="flex justify-between items-start p-4 border-2 border-primary/5 rounded-xl bg-primary/5 group">
+                                <div>
+                                  <p className="font-bold text-secondary text-xs uppercase tracking-widest flex items-center gap-2">
+                                    {addr.label} {addr.isPrimary && <span className="text-[8px] bg-primary text-white px-1.5 py-0.5 rounded-full">PRIMARY</span>}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground mt-1">{addr.street}, {addr.city}</p>
+                                  <p className="text-[10px] text-muted-foreground">{addr.postalCode} • {addr.country}</p>
+                                </div>
+                                <Button variant="ghost" size="icon" className="text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => deleteAddress(addr.id!)}>
+                                  <Trash2 size={14} />
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="py-6 text-center">
+                             <MapPin className="mx-auto h-8 w-8 text-primary/20 mb-2" />
+                             <p className="text-xs text-muted-foreground italic">No heritage destinations saved.</p>
+                          </div>
+                        )}
+
+                        <Separator className="bg-primary/5" />
+
                         <Form {...addressForm}>
-                          <form onSubmit={addressForm.handleSubmit(onAddressSubmit)} className="space-y-6">
+                          <form onSubmit={addressForm.handleSubmit(onAddressSubmit)} className="space-y-4">
+                            <FormField control={addressForm.control} name="label" render={({ field }) => (
+                                <FormItem><FormLabel className="text-[10px] uppercase font-bold text-secondary/50">Label (e.g. Home, Work)</FormLabel>
+                                <FormControl><Input placeholder="Label" {...field} disabled={isAddressSubmitting} className="h-10 rounded-lg text-xs" /></FormControl><FormMessage /></FormItem>)} />
                             <FormField control={addressForm.control} name="street" render={({ field }) => (
-                                <FormItem>
-                                  <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Shipping Address</FormLabel>
-                                  <FormControl><Input placeholder="e.g. 4th Floor, Mavazi Towers" {...field} disabled={isAddressSubmitting} className="rounded-xl h-12" /></FormControl>
-                                  <FormMessage />
-                                </FormItem>
-                              )}
-                            />
+                                <FormItem><FormLabel className="text-[10px] uppercase font-bold text-secondary/50">Street & Building</FormLabel>
+                                <FormControl><Input {...field} disabled={isAddressSubmitting} className="h-10 rounded-lg text-xs" /></FormControl><FormMessage /></FormItem>)} />
                              <div className="grid grid-cols-2 gap-4">
                               <FormField control={addressForm.control} name="city" render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">City</FormLabel>
-                                    <FormControl><Input placeholder="Nairobi" {...field} disabled={isAddressSubmitting} className="rounded-xl h-12" /></FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
+                                  <FormItem><FormLabel className="text-[10px] uppercase font-bold text-secondary/50">City/Town</FormLabel>
+                                  <FormControl><Input {...field} disabled={isAddressSubmitting} className="h-10 rounded-lg text-xs" /></FormControl><FormMessage /></FormItem>)} />
                               <FormField control={addressForm.control} name="postalCode" render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Postal Code</FormLabel>
-                                    <FormControl><Input placeholder="00100" {...field} disabled={isAddressSubmitting} className="rounded-xl h-12" /></FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
+                                  <FormItem><FormLabel className="text-[10px] uppercase font-bold text-secondary/50">Code</FormLabel>
+                                  <FormControl><Input {...field} disabled={isAddressSubmitting} className="h-10 rounded-lg text-xs" /></FormControl><FormMessage /></FormItem>)} />
                             </div>
-                            <Button type="submit" className="w-full bg-secondary text-white h-14 rounded-xl font-bold tracking-widest shadow-xl shadow-secondary/20" disabled={isAddressSubmitting}>
-                               {isAddressSubmitting ? <Loader2 className="animate-spin" /> : "SYNC LOGISTICS"}
+                            <Button type="submit" className="w-full bg-secondary text-white h-12 rounded-xl font-bold tracking-widest text-[10px]" disabled={isAddressSubmitting}>
+                               {isAddressSubmitting ? <Loader2 className="animate-spin h-4 w-4" /> : <Plus size={14} className="mr-2"/>}
+                               ADD NEW DESTINATION
                             </Button>
                           </form>
                         </Form>

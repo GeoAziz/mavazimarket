@@ -22,8 +22,22 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+/**
+ * CartProvider - The Synchronized Logistics Coordinator
+ * Bridges the gap between local persistence (Zustand/localStorage) and cloud persistence (Firestore).
+ */
 export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const { cartItems, addToCart: storeAddToCart, removeFromCart: storeRemoveFromCart, updateQuantity: storeUpdateQuantity, clearCart: storeClearCart, totalItems: storeTotalItems, totalAmount: storeTotalAmount } = useCartStore();
+  const { 
+    cartItems, 
+    addToCart: storeAddToCart, 
+    removeFromCart: storeRemoveFromCart, 
+    updateQuantity: storeUpdateQuantity, 
+    clearCart: storeClearCart, 
+    setCartItems: storeSetCartItems,
+    totalItems: storeTotalItems, 
+    totalAmount: storeTotalAmount 
+  } = useCartStore();
+  
   const [isCartLoaded, setIsCartLoaded] = useState(false);
   const { currentUser } = useAuth();
 
@@ -32,43 +46,66 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     return collection(db, "users", userId, "cartItems");
   }, []);
 
-  // Sync with Firestore for logged in users
+  /**
+   * Dual-Sync Logic: Synchronization between Guest Local Storage and User Cloud Archive
+   */
   useEffect(() => {
-    const syncCart = async () => {
+    const syncCartWithCloud = async () => {
       if (currentUser && db) {
         setIsCartLoaded(false);
         try {
           const cartColRef = getCartCollectionRef(currentUser.uid);
-          if (cartColRef) {
-            const snapshot = await getDocs(cartColRef);
-            const firestoreItems = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CartItem));
-            
-            // For MVP, we'll favor the local cart if firestore is empty, otherwise favor firestore
-            if (firestoreItems.length > 0) {
-              useCartStore.setState({ cartItems: firestoreItems });
-            } else if (cartItems.length > 0) {
-              // Push local items to firestore
-              const batch = writeBatch(db);
-              cartItems.forEach(item => {
-                batch.set(doc(cartColRef, item.id), item);
-              });
-              await batch.commit();
-            }
+          if (!cartColRef) return;
+
+          const snapshot = await getDocs(cartColRef);
+          const firestoreItems = snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as CartItem));
+          
+          // Logic: Merge local items into Firestore if user just logged in
+          if (cartItems.length > 0) {
+            const batch = writeBatch(db);
+            const mergedItems = [...firestoreItems];
+
+            cartItems.forEach(localItem => {
+              const existingIndex = mergedItems.findIndex(i => i.id === localItem.id);
+              if (existingIndex > -1) {
+                // Update quantity if item exists in both
+                mergedItems[existingIndex].quantity += localItem.quantity;
+                batch.set(doc(cartColRef, localItem.id), { quantity: mergedItems[existingIndex].quantity }, { merge: true });
+              } else {
+                // Add new item from local to cloud
+                mergedItems.push(localItem);
+                batch.set(doc(cartColRef, localItem.id), localItem);
+              }
+            });
+
+            await batch.commit();
+            storeSetCartItems(mergedItems);
+          } else if (firestoreItems.length > 0) {
+            // Load cloud cart if local store was empty
+            storeSetCartItems(firestoreItems);
           }
         } catch (error) {
-          console.error("Cart sync error:", error);
+          console.error("Cart Logistics Error (Cloud Sync):", error);
         } finally {
           setIsCartLoaded(true);
         }
       } else {
+        // Guest mode: Zustand handles persist via localStorage automatically
         setIsCartLoaded(true);
       }
     };
-    syncCart();
-  }, [currentUser, getCartCollectionRef]);
+
+    syncCartWithCloud();
+    
+    // Clear cart on logout to prevent state leak between users on same machine
+    if (!currentUser && isCartLoaded) {
+      storeClearCart();
+    }
+  }, [currentUser]);
 
   const addToCart = async (product: ProductType, quantity: number = 1, selectedSize?: string, selectedColor?: string) => {
     storeAddToCart(product, quantity, selectedSize, selectedColor);
+    
     if (currentUser && db) {
       const cartItemId = `${product.id}${selectedSize ? `-${selectedSize}` : ''}${selectedColor ? `-${selectedColor}` : ''}`;
       const cartColRef = getCartCollectionRef(currentUser.uid);
@@ -78,11 +115,11 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
           productId: product.id,
           name: product.name,
           price: product.price,
-          quantity: quantity, // Note: This logic needs to handle merging if we want full firestore sync
+          quantity: (cartItems.find(i => i.id === cartItemId)?.quantity || 0) + quantity, 
           image: product.images[0],
           slug: product.slug,
-          size: selectedSize,
-          color: selectedColor,
+          size: selectedSize || 'OS',
+          color: selectedColor || 'Default',
         };
         await setDoc(doc(cartColRef, cartItemId), item, { merge: true });
       }
