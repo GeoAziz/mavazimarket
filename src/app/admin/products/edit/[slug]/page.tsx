@@ -124,15 +124,25 @@ export default function AdminEditProductPage({ params: paramsPromise }: EditProd
     resolver: zodResolver(productFormSchema),
     defaultValues: {
       name: "", description: "", price: 0, category: "", subcategory: "",
-      stockQuantity: 0, brand: "", material: "", sizes: "", colors: "", tags: "", isPublished: true, dataAiHint: "",
+      stockQuantity: 0, brand: "", material: "", sizes: "", colors: "", tags: "", isPublished: true, dataAiHint: ""
     },
   });
 
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const filesArray = Array.from(event.target.files);
-      setImageFiles(prev => [...prev, ...filesArray]);
-      const newPreviews = filesArray.map(file => URL.createObjectURL(file));
+      const validFiles = filesArray.filter(file => {
+        const isValidType = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+        const isValidSize = file.size <= 5 * 1024 * 1024;
+        return isValidType && isValidSize;
+      });
+
+      if (validFiles.length !== filesArray.length) {
+        toast({ title: "Invalid Media", description: "JPG/PNG/WebP under 5MB only.", variant: "destructive" });
+      }
+
+      setImageFiles(prev => [...prev, ...validFiles]);
+      const newPreviews = validFiles.map(file => URL.createObjectURL(file));
       setImagePreviews(prev => [...prev, ...newPreviews]);
     }
   };
@@ -255,7 +265,7 @@ export default function AdminEditProductPage({ params: paramsPromise }: EditProd
                     <FormItem className="mb-8">
                       <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Add Visual Assets</FormLabel>
                       <FormControl>
-                        <Input type="file" multiple accept="image/*" onChange={handleImageChange} disabled={isSaving}
+                        <Input type="file" multiple accept="image/jpeg,image/png,image/webp" onChange={handleImageChange} disabled={isSaving}
                           className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20"
                         />
                       </FormControl>

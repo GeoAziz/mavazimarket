@@ -1,9 +1,10 @@
+
 'use server';
 /**
  * @fileOverview AI Style Advisor Flow.
  *
- * This flow provides personalized style recommendations based on a user's purchase history.
- * - styleAdvisor - A function that takes a user's purchase history and returns style recommendations.
+ * This flow provides personalized style recommendations based on a user's purchase history and preferences.
+ * - styleAdvisor - A function that takes a style profile and returns heritage recommendations.
  * - StyleAdvisorInput - The input type for the styleAdvisor function.
  * - StyleAdvisorOutput - The return type for the styleAdvisor function.
  */
@@ -15,7 +16,7 @@ const StyleAdvisorInputSchema = z.object({
   purchaseHistory: z
     .string()
     .describe(
-      'A string containing the user purchase history, each purchase should be separated by commas.'
+      'A description of the user style preferences, past purchases, and heritage interests.'
     ),
 });
 export type StyleAdvisorInput = z.infer<typeof StyleAdvisorInputSchema>;
@@ -23,7 +24,7 @@ export type StyleAdvisorInput = z.infer<typeof StyleAdvisorInputSchema>;
 const StyleAdvisorOutputSchema = z.object({
   recommendations: z
     .string()
-    .describe('Personalized style recommendations based on purchase history.'),
+    .describe('A high-fidelity heritage consultation report with style recommendations.'),
 });
 export type StyleAdvisorOutput = z.infer<typeof StyleAdvisorOutputSchema>;
 
@@ -35,9 +36,14 @@ const prompt = ai.definePrompt({
   name: 'styleAdvisorPrompt',
   input: {schema: StyleAdvisorInputSchema},
   output: {schema: StyleAdvisorOutputSchema},
-  prompt: `Based on the user's purchase history, provide personalized style recommendations.
+  prompt: `You are the Mavazi Market Heritage Stylist, an expert in modern Afrocentric fashion and Kenyan craftsmanship.
 
-    Purchase History: {{{purchaseHistory}}}
+    Based on the user's provided style profile, provide a premium consultation report. 
+    Focus on how different textures (like Kitenge or Mud Cloth), silhouettes, and earthy tones can speak to their unique path.
+    
+    Structure your response with clear headings and a bold, encouraging tone.
+
+    User Profile: {{{purchaseHistory}}}
 
     Recommendations: `,
 });

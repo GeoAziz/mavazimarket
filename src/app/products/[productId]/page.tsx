@@ -24,6 +24,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useToast } from '@/hooks/use-toast';
 import { submitProductReviewAction } from './review-actions';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface ProductPageProps {
   params: Promise<{ productId: string }>;
@@ -48,16 +49,14 @@ export default function ProductPage({ params }: ProductPageProps) {
     const fetchProductAndReviews = async () => {
       setLoading(true);
       try {
-        // Query product by slug
-        const productsRef = collection(db, "products");
-        const q = query(productsRef, orderBy("slug"), limit(100)); // Simplified for demo
-        // In a real production app, we'd use a more direct query or a server-side pre-fetch
-        // But for client-side resilience, we'll handle it here.
+        // In a real app, doc ID might be random or slug. 
+        // Our current setup often uses slug as doc ID or has it as a field.
+        const docRef = doc(db, "products", slug);
+        const docSnap = await getDoc(docRef);
         
-        // Let's assume we find it via a direct find for the MVP
-        const docSnap = await getDoc(doc(db, "products", slug)); // Try direct ID first
         if (docSnap.exists()) {
-          setProduct({ id: docSnap.id, ...docSnap.data() } as Product);
+          const productData = { id: docSnap.id, ...docSnap.data() } as Product;
+          setProduct(productData);
           
           // Listen for real-time reviews
           const reviewsRef = collection(db, "products", docSnap.id, "reviews");
@@ -108,6 +107,12 @@ export default function ProductPage({ params }: ProductPageProps) {
     if (result.success) {
       toast({ title: "Review Shared", description: "Thank you for your feedback!" });
       setUserComment("");
+      // Force a re-fetch of the product to get the new averageRating and reviewCount
+      const docRef = doc(db!, "products", product.id);
+      const updatedSnap = await getDoc(docRef);
+      if (updatedSnap.exists()) {
+        setProduct({ id: updatedSnap.id, ...updatedSnap.data() } as Product);
+      }
     } else {
       toast({ title: "Error", description: result.error, variant: "destructive" });
     }
@@ -157,7 +162,7 @@ export default function ProductPage({ params }: ProductPageProps) {
           </div>
           
           <div className="flex items-center space-x-2">
-            <ReviewStars rating={product.averageRating || 0} totalReviews={reviews.length} />
+            <ReviewStars rating={product.averageRating || 0} totalReviews={product.reviewCount || 0} />
             <span className="text-sm text-muted-foreground">|</span>
             <span className={product.stockQuantity > 0 ? "text-green-600 font-bold text-xs uppercase" : "text-destructive font-bold text-xs uppercase"}>
               {product.stockQuantity > 0 ? `In Stock (${product.stockQuantity})` : "Out of Stock"}
@@ -198,10 +203,10 @@ export default function ProductPage({ params }: ProductPageProps) {
       <Tabs defaultValue="reviews" className="w-full pt-12">
         <TabsList className="grid w-full grid-cols-2 bg-secondary/5 rounded-xl h-14 p-1">
           <TabsTrigger value="description" className="font-heading text-lg rounded-lg">THE STORY</TabsTrigger>
-          <TabsTrigger value="reviews" className="font-heading text-lg rounded-lg">VOICES ({reviews.length})</TabsTrigger>
+          <TabsTrigger value="reviews" className="font-heading text-lg rounded-lg">VOICES ({product.reviewCount || 0})</TabsTrigger>
         </TabsList>
         <TabsContent value="description" className="py-12">
-          <div className="max-w-3xl mx-auto prose prose-stone lg:prose-xl font-sans text-muted-foreground">
+          <div className="max-w-3xl auto prose prose-stone lg:prose-xl font-sans text-muted-foreground">
             <p>{product.description}</p>
             <p>Every Mavazi Market piece is a bridge between generations. Crafted with respect for traditional silhouettes and updated for the modern pace.</p>
           </div>

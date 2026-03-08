@@ -15,6 +15,7 @@ export type Product = {
   brand?: string;
   stockQuantity: number;
   averageRating?: number;
+  reviewCount?: number; // Added for accurate rating aggregation
   slug: string;
   tags?: string[]; 
   dataAiHint?: string; 
@@ -80,11 +81,13 @@ export type Order = {
   id: string; 
   userId: string; 
   orderDate: Timestamp | string; 
-  status: 'Pending' | 'Shipped' | 'Delivered' | 'Cancelled';
+  status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: CartItem[];
   totalAmount: number;
   shippingAddress: Address;
   paymentMethod: string;
+  trackingNumber?: string;
+  mpesaTransactionId?: string;
   updatedAt?: Timestamp | string;
 };
 

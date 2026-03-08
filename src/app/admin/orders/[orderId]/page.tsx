@@ -6,21 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Package, User, MapPin, Truck, CreditCard, FileText, Loader2, Save } from 'lucide-react';
-import type { Order, CartItem as OrderItemType, Product } from '@/lib/types'; // Renamed CartItem to OrderItemType for clarity
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { ArrowLeft, Package, User, MapPin, Truck, CreditCard, FileText, Loader2, Save, Send } from 'lucide-react';
+import type { Order, CartItem as OrderItemType, Product } from '@/lib/types';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
-import { doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useEffect, useState, use } from 'react';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
+import { updateOrderLogisticsAction } from './actions';
 
-// Define OrderItem with slug for product linking
 interface EnrichedOrderItem extends OrderItemType {
   slug?: string;
-  productImage?: string; // To distinguish from item.image if it's different in order
+  productImage?: string;
 }
 
 export default function AdminOrderDetailPage() {
@@ -29,11 +31,12 @@ export default function AdminOrderDetailPage() {
   const { toast } = useToast();
 
   const [order, setOrder] = useState<Order | null>(null);
-  const [customer, setCustomer] = useState<any | null>(null); // Replace 'any' with actual User type if available
+  const [customer, setCustomer] = useState<any | null>(null);
   const [enrichedOrderItems, setEnrichedOrderItems] = useState<EnrichedOrderItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [selectedStatus, setSelectedStatus] = useState<Order['status'] | ''>('');
+  const [trackingNumber, setTrackingNumber] = useState('');
 
   useEffect(() => {
     if (!orderId) return;
@@ -41,33 +44,30 @@ export default function AdminOrderDetailPage() {
     const fetchOrderDetails = async () => {
       setLoading(true);
       try {
-        const orderDocRef = doc(db, "orders", orderId);
+        const orderDocRef = doc(db!, "orders", orderId);
         const orderSnap = await getDoc(orderDocRef);
 
         if (orderSnap.exists()) {
           const orderData = { id: orderSnap.id, ...orderSnap.data() } as Order;
-           orderData.orderDate = (orderData.orderDate as any).toDate ? (orderData.orderDate as any).toDate().toISOString() : new Date(orderData.orderDate).toISOString();
+          // Normalize dates
+          orderData.orderDate = (orderData.orderDate as any).toDate ? (orderData.orderDate as any).toDate().toISOString() : new Date(orderData.orderDate as string).toISOString();
+          
           setOrder(orderData);
           setSelectedStatus(orderData.status);
+          setTrackingNumber(orderData.trackingNumber || '');
 
-          // Fetch customer details if userId exists
           if (orderData.userId) {
-            const userDocRef = doc(db, "users", orderData.userId);
+            const userDocRef = doc(db!, "users", orderData.userId);
             const userSnap = await getDoc(userDocRef);
             if (userSnap.exists()) {
               setCustomer({ id: userSnap.id, ...userSnap.data() });
             }
           }
 
-          // Enrich order items with product slugs and images
           const itemsWithDetails = await Promise.all(
             orderData.items.map(async (item) => {
               try {
-                // Assuming item.id might be like 'productActualId-variantInfo' or just 'productActualId'
-                // We need a robust way to get the base product ID if variants are involved.
-                // For now, let's assume item.id is the actual product ID or a direct key.
-                // A more robust system might store productSnapshot in order item.
-                const productDocRef = doc(db, "products", item.productId || item.id); // Prefer item.productId
+                const productDocRef = doc(db!, "products", item.productId || item.id);
                 const productSnap = await getDoc(productDocRef);
                 if (productSnap.exists()) {
                   const productData = productSnap.data() as Product;
@@ -78,7 +78,7 @@ export default function AdminOrderDetailPage() {
                   };
                 }
               } catch (e) { console.error("Error fetching product for order item", item.id, e); }
-              return { ...item, slug: '#', productImage: item.image }; // Fallback
+              return { ...item, slug: '#', productImage: item.image };
             })
           );
           setEnrichedOrderItems(itemsWithDetails as EnrichedOrderItem[]);
@@ -96,31 +96,42 @@ export default function AdminOrderDetailPage() {
     fetchOrderDetails();
   }, [orderId, toast]);
 
-  const handleUpdateStatus = async () => {
-    if (!order || !selectedStatus || selectedStatus === order.status) return;
-    setIsUpdatingStatus(true);
-    try {
-      const orderDocRef = doc(db, "orders", orderId);
-      await updateDoc(orderDocRef, { status: selectedStatus });
-      setOrder(prev => prev ? { ...prev, status: selectedStatus } : null);
-      toast({ title: "Success", description: `Order status updated to ${selectedStatus}.` });
-    } catch (error) {
-      console.error("Error updating order status:", error);
-      toast({ title: "Error", description: "Failed to update order status.", variant: "destructive" });
+  const handleUpdateLogistics = async () => {
+    if (!order || !selectedStatus) return;
+    setIsUpdating(true);
+    
+    const result = await updateOrderLogisticsAction({
+      orderId: order.id,
+      status: selectedStatus as Order['status'],
+      trackingNumber: trackingNumber,
+      customerEmail: customer?.email || '',
+      customerName: customer?.name || 'Valued Customer'
+    });
+
+    if (result.success) {
+      setOrder(prev => prev ? { ...prev, status: selectedStatus as Order['status'], trackingNumber } : null);
+      toast({ 
+        title: "Logistics Synced", 
+        description: `Order ${selectedStatus} and customer notified via Resend.` 
+      });
+    } else {
+      toast({ title: "Update Failed", description: result.error, variant: "destructive" });
     }
-    setIsUpdatingStatus(false);
+    setIsUpdating(false);
   };
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-            <Skeleton className="h-9 w-3/5" />
-            <Skeleton className="h-10 w-36" />
-        </div>
-        <div className="grid md:grid-cols-3 gap-6 items-start">
-            <Card className="md:col-span-2 shadow-lg"><CardHeader><Skeleton className="h-6 w-1/2" /></CardHeader><CardContent className="space-y-4"><Skeleton className="h-24 w-full" /><Skeleton className="h-12 w-full" /></CardContent></Card>
-            <div className="space-y-6"><Card><CardHeader><Skeleton className="h-5 w-3/4" /></CardHeader><CardContent><Skeleton className="h-10 w-full" /></CardContent></Card><Card><CardHeader><Skeleton className="h-5 w-3/4" /></CardHeader><CardContent className="space-y-1"><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-3/4" /></CardContent></Card></div>
+        <Skeleton className="h-12 w-1/2 rounded-xl" />
+        <div className="grid md:grid-cols-3 gap-6">
+            <div className="md:col-span-2 space-y-6">
+                <Skeleton className="h-96 w-full rounded-2xl" />
+            </div>
+            <div className="space-y-6">
+                <Skeleton className="h-48 w-full rounded-2xl" />
+                <Skeleton className="h-48 w-full rounded-2xl" />
+            </div>
         </div>
       </div>
     );
@@ -128,160 +139,149 @@ export default function AdminOrderDetailPage() {
 
   if (!order) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <Package size={48} className="text-muted-foreground mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Order Not Found</h2>
-        <p className="text-muted-foreground mb-4">The order with ID "{orderId}" could not be found.</p>
-        <Button asChild variant="outline">
-          <Link href="/admin/orders">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Orders
-          </Link>
+      <div className="flex flex-col items-center justify-center py-24 text-center">
+        <Package size={64} className="text-primary/20 mb-6" />
+        <h2 className="text-2xl font-heading text-secondary">Logistics Archive Not Found</h2>
+        <Button asChild variant="outline" className="mt-6 border-primary text-primary">
+          <Link href="/admin/orders">BACK TO ARCHIVE</Link>
         </Button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-        <h1 className="text-2xl lg:text-3xl font-bold text-primary flex items-center">
-          <FileText size={30} className="mr-3 text-accent" /> Order Details: #{order.id}
-        </h1>
-        <Button asChild variant="outline">
-          <Link href="/admin/orders">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Orders
-          </Link>
+    <div className="space-y-8 pb-24">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-heading text-secondary">Order Logistics</h1>
+          <p className="text-[10px] uppercase tracking-widest font-bold text-primary">ID: #{order.id}</p>
+        </div>
+        <Button variant="outline" className="border-secondary" asChild>
+          <Link href="/admin/orders"><ArrowLeft className="mr-2 h-4 w-4" /> BACK TO LOGISTICS</Link>
         </Button>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6 items-start">
-        {/* Order Items */}
-        <Card className="md:col-span-2 shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl flex items-center"><Package className="mr-2 text-primary/80"/>Items in Order ({enrichedOrderItems.length})</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-4">
-              {enrichedOrderItems.map((item: EnrichedOrderItem) => (
-                <li key={item.id} className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 p-3 border rounded-md bg-muted/30">
-                  <Image
-                    src={item.productImage || 'https://placehold.co/64x80.png'}
-                    alt={item.name}
-                    width={64}
-                    height={80}
-                    className="rounded-md object-cover aspect-[3/4] w-full sm:w-16"
-                    data-ai-hint="product clothing"
+      <div className="grid lg:grid-cols-3 gap-8 items-start">
+        <div className="lg:col-span-2 space-y-8">
+          <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
+            <CardHeader className="bg-secondary text-background p-8">
+              <CardTitle className="text-xl font-heading flex items-center">
+                <Package className="mr-3 text-primary" /> Curation Manifest ({enrichedOrderItems.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-8">
+              <ul className="space-y-6">
+                {enrichedOrderItems.map((item) => (
+                  <li key={item.id} className="flex gap-6 p-4 rounded-xl bg-primary/5 border border-primary/10 group transition-all hover:bg-primary/10">
+                    <div className="relative h-24 w-18 rounded-lg overflow-hidden shadow-md">
+                      <Image src={item.productImage || 'https://placehold.co/64x80.png'} alt={item.name} fill className="object-cover" />
+                    </div>
+                    <div className="flex-1 flex flex-col justify-between py-1">
+                      <div>
+                        <Link href={`/products/${item.slug}`} target="_blank" className="font-heading text-lg text-secondary hover:text-primary transition-colors">{item.name}</Link>
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mt-1">QTY: {item.quantity} • {item.size || 'OS'}</p>
+                      </div>
+                      <p className="font-heading text-primary font-bold">KSh {(item.price * item.quantity).toLocaleString()}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <Separator className="my-8 bg-primary/10" />
+              <div className="flex flex-col items-end gap-2 px-4">
+                <div className="flex justify-between w-full max-w-[200px] text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                  <span>SUBTOTAL</span>
+                  <span>KSh {order.totalAmount.toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between w-full max-w-[300px] text-3xl font-heading text-primary font-bold pt-4">
+                  <span>TOTAL</span>
+                  <span>KSh {order.totalAmount.toLocaleString()}</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-8 lg:sticky lg:top-24">
+          <Card className="shadow-2xl border-none rounded-2xl overflow-hidden bg-card">
+            <CardHeader className="bg-primary text-white p-8">
+              <CardTitle className="text-xl font-heading flex items-center"><Truck className="mr-3 text-accent" /> Logistics Management</CardTitle>
+            </CardHeader>
+            <CardContent className="p-8 space-y-6">
+              <div className="space-y-4">
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Shipping Status</Label>
+                <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as Order['status'])}>
+                  <SelectTrigger className="h-12 border-2 border-primary/10 rounded-xl focus:ring-primary">
+                    <SelectValue placeholder="Update status..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Pending">Pending</SelectItem>
+                    <SelectItem value="Processing">Processing</SelectItem>
+                    <SelectItem value="Shipped">Shipped</SelectItem>
+                    <SelectItem value="Delivered">Delivered</SelectItem>
+                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Tracking Number</Label>
+                <div className="relative">
+                  <Truck className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-primary/40" />
+                  <Input 
+                    placeholder="e.g. MAV-12345678" 
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    className="pl-12 h-12 border-2 border-primary/10 rounded-xl" 
                   />
-                  <div className="flex-grow">
-                    <Link href={`/products/${item.slug}`} target="_blank" className="font-semibold text-foreground hover:underline">{item.name}</Link>
-                    <p className="text-sm text-muted-foreground">SKU: {item.productId || item.id}</p>
-                    <p className="text-sm text-muted-foreground">Qty: {item.quantity}</p>
-                  </div>
-                  <div className="text-right w-full sm:w-auto pt-2 sm:pt-0">
-                    <p className="font-medium text-foreground">KSh {(item.price * item.quantity).toLocaleString()}</p>
-                    <p className="text-sm text-muted-foreground">KSh {item.price.toLocaleString()} each</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-            <Separator className="my-4" />
-            <div className="space-y-1 text-right text-sm">
-              <div className="flex justify-end space-x-4">
-                <span className="text-muted-foreground">Subtotal:</span>
-                <span className="font-medium text-foreground">KSh {order.totalAmount.toLocaleString()}</span>
+                </div>
               </div>
-              {/* Shipping and Tax can be added here if they are part of order data */}
-              <Separator className="my-1"/>
-              <div className="flex justify-end space-x-4 text-lg font-bold">
-                <span className="text-primary">Total:</span>
-                <span className="text-primary">KSh {order.totalAmount.toLocaleString()}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
 
-        {/* Customer & Order Info Column */}
-        <div className="space-y-6 md:sticky md:top-24">
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center"><Truck className="mr-2 text-primary/80"/>Order Status & Tracking</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-muted-foreground">Current Status:</span>
-                <Badge variant={
-                        order.status === 'Delivered' ? 'default' :
-                        order.status === 'Shipped' ? 'secondary' :
-                        order.status === 'Pending' ? 'outline' : 'destructive'
-                      }
-                      className={`px-3 py-1 text-xs font-semibold ${
-                        order.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                        order.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
-                        order.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-red-100 text-red-700'
-                      }`}>
-                        {order.status}
-                </Badge>
-              </div>
-              <Select value={selectedStatus} onValueChange={(value) => setSelectedStatus(value as Order['status'])}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Change status..." />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Pending">Pending</SelectItem>
-                  <SelectItem value="Shipped">Shipped</SelectItem>
-                  <SelectItem value="Delivered">Delivered</SelectItem>
-                  <SelectItem value="Cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button
-                onClick={handleUpdateStatus}
-                disabled={isUpdatingStatus || selectedStatus === order.status || !selectedStatus}
-                className="w-full mt-2 bg-primary hover:bg-primary/90 text-primary-foreground"
+              <Button 
+                onClick={handleUpdateLogistics}
+                disabled={isUpdating || !selectedStatus}
+                className="w-full h-14 bg-secondary text-white font-bold tracking-[0.2em] shadow-xl transition-all active:scale-[0.98]"
               >
-                {isUpdatingStatus && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Save size={16} className="mr-2" /> Update Status
+                {isUpdating ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                SYNC LOGISTICS
               </Button>
-              <p className="text-sm text-muted-foreground">Order Date: {new Date(order.orderDate).toLocaleString()}</p>
-              <p className="text-sm text-muted-foreground">Tracking #: MOCKTRACK123XYZ (Static)</p>
+              
+              <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 flex items-center gap-3">
+                <Send className="h-4 w-4 text-primary" />
+                <p className="text-[10px] uppercase font-bold tracking-widest text-primary/60">Automated Resend Notification Active</p>
+              </div>
             </CardContent>
           </Card>
 
-          {customer && (
-            <Card className="shadow-md">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center"><User className="mr-2 text-primary/80"/>Customer Information</CardTitle>
-              </CardHeader>
-              <CardContent className="text-sm space-y-1">
-                <p className="font-medium text-foreground">{customer.name || 'N/A'}</p>
-                <p className="text-muted-foreground">{customer.email || 'N/A'}</p>
-                {/* <p className="text-muted-foreground">{customer.phone || '+254 7XX XXX XXX (Mock)'}</p> */}
-                <Button variant="link" size="sm" className="p-0 h-auto text-accent hover:underline" asChild>
-                  <Link href={`/admin/customers/${customer.id}`}>View Customer Profile</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center"><MapPin className="mr-2 text-primary/80"/>Shipping Address</CardTitle>
+          <Card className="shadow-xl border-none rounded-2xl overflow-hidden">
+            <CardHeader className="bg-secondary/5 border-b border-primary/5 p-6">
+              <CardTitle className="text-sm font-heading flex items-center text-secondary"><User className="mr-2 text-primary" size={16} /> Destination & Identity</CardTitle>
             </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              <p>{order.shippingAddress?.street || 'N/A'}</p>
-              <p>{order.shippingAddress?.city}, {order.shippingAddress?.postalCode}</p>
-              <p>{order.shippingAddress?.country}</p>
-            </CardContent>
-          </Card>
-
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center"><CreditCard className="mr-2 text-primary/80"/>Payment Information</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-1">
-              <p className="text-muted-foreground">Method: <span className="font-medium text-foreground">{order.paymentMethod}</span></p>
-              <p className="text-muted-foreground">Transaction ID: MOCKPAYID789 (Static)</p>
-              <p className="text-muted-foreground">Status: <span className="text-green-600 font-medium">Paid</span> (Mock)</p>
+            <CardContent className="p-6 space-y-4">
+              {customer && (
+                <div className="pb-4 border-b border-primary/5">
+                  <p className="font-bold text-secondary text-sm">{customer.name}</p>
+                  <p className="text-xs text-muted-foreground">{customer.email}</p>
+                  <Button variant="link" size="sm" className="p-0 h-auto text-primary text-[10px] font-bold uppercase tracking-widest mt-2" asChild>
+                    <Link href={`/admin/customers/${customer.id}`}>View Heritage Profile</Link>
+                  </Button>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <MapPin className="h-4 w-4 text-primary shrink-0 mt-1" />
+                <div className="text-xs text-muted-foreground leading-relaxed">
+                  <p className="font-bold text-secondary">Shipping Address:</p>
+                  <p>{order.shippingAddress?.street}</p>
+                  <p>{order.shippingAddress?.city}, {order.shippingAddress?.postalCode}</p>
+                  <p>{order.shippingAddress?.country}</p>
+                </div>
+              </div>
+              <div className="flex gap-3 pt-2">
+                <CreditCard className="h-4 w-4 text-primary shrink-0 mt-1" />
+                <div className="text-xs text-muted-foreground">
+                  <p className="font-bold text-secondary uppercase tracking-widest">Settle via {order.paymentMethod}</p>
+                  {order.mpesaTransactionId && <p className="text-[10px]">TXN: {order.mpesaTransactionId}</p>}
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

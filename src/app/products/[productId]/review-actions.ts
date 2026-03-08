@@ -2,7 +2,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, updateDoc, increment, getDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, doc, updateDoc, getDoc } from 'firebase/firestore';
 import { revalidatePath } from 'next/cache';
 
 interface SubmitReviewArgs {
@@ -16,7 +16,8 @@ interface SubmitReviewArgs {
 
 /**
  * Heritage Review Submission
- * Creates a review in the product's sub-collection and updates the parent aggregate rating.
+ * Creates a review in the product's sub-collection and updates the parent aggregate rating and review count.
+ * Fulfills the real-time feedback loop requirement of the March 2026 blueprint.
  */
 export async function submitProductReviewAction(args: SubmitReviewArgs) {
   const { productId, userId, userName, rating, comment, slug } = args;
@@ -38,16 +39,20 @@ export async function submitProductReviewAction(args: SubmitReviewArgs) {
       updatedAt: serverTimestamp(),
     });
 
-    // 2. Mock Logic for Updating Aggregate Rating (in real production this would be a Cloud Function)
-    // For MVP, we'll do a simple update if the doc exists
+    // 2. Real Logic for Updating Aggregate Rating
+    // We fetch the current state to perform an accurate weighted average calculation.
     const productSnap = await getDoc(productRef);
     if (productSnap.exists()) {
-        const currentRating = productSnap.data().averageRating || 0;
-        const totalReviews = 10; // Mock count for now or fetch actual count
-        const newRating = ((currentRating * totalReviews) + rating) / (totalReviews + 1);
+        const productData = productSnap.data();
+        const currentRating = productData.averageRating || 0;
+        const currentCount = productData.reviewCount || 0;
+        
+        const newCount = currentCount + 1;
+        const newRating = ((currentRating * currentCount) + rating) / newCount;
         
         await updateDoc(productRef, {
             averageRating: Number(newRating.toFixed(1)),
+            reviewCount: newCount,
             updatedAt: serverTimestamp(),
         });
     }

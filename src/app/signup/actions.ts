@@ -1,3 +1,4 @@
+
 'use server'
 
 import { getAdminFirestore } from '@/lib/firebase-admin';
@@ -33,7 +34,13 @@ export async function handleUserSignupCompletion(
       role: 'user', // Default role
       isBlocked: false,
       wishlist: [],
-      photoURL: `https://placehold.co/100x100.png?text=${firstName.charAt(0)}`,
+      shippingAddress: {
+        street: '',
+        city: '',
+        postalCode: '',
+        country: 'Kenya'
+      },
+      photoURL: `https://placehold.co/128x128.png?text=${firstName.charAt(0)}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };

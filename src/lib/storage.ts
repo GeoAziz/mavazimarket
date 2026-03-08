@@ -3,17 +3,16 @@ import { storage } from './firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 /**
- * Uploads a file to Firebase Storage and returns the download URL.
- * Fulfills the "High-End Media Management" requirement of the blueprint.
+ * High-End Media Management
+ * Uploads a file to Firebase Storage and returns the permanent download URL.
  * 
- * @param file The heritage asset to upload.
+ * @param file The heritage visual asset to upload.
  * @param path The classification path (e.g., 'products', 'categories').
  */
 export async function uploadImage(file: File, path: string): Promise<string> {
   if (!storage) {
-    console.warn("Storage Sync Failure: Firebase Storage is not initialized.");
-    // Fallback for development if storage isn't ready
-    return `https://placehold.co/600x800.png?text=Pending+Upload`;
+    console.error("Logistics Alert: Firebase Storage is not initialized.");
+    throw new Error("Cloud storage infrastructure is unavailable. Please verify environment variables.");
   }
 
   // Create a unique, URL-safe classification for the heritage asset
@@ -26,7 +25,7 @@ export async function uploadImage(file: File, path: string): Promise<string> {
     const downloadURL = await getDownloadURL(snapshot.ref);
     return downloadURL;
   } catch (error) {
-    console.error("Heritage Archive Failure:", error);
+    console.error("Media Archive Failure:", error);
     throw new Error("Failed to archive visual asset to the cloud. Please verify storage permissions.");
   }
 }

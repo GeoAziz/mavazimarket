@@ -7,25 +7,26 @@ import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, UserCircle, MapPin, Mail, Phone, ShoppingBag, Edit3, MessageSquare, Loader2, Save, ShieldCheck, UserCog, Ban, CheckCircle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { ArrowLeft, UserCircle, MapPin, ShoppingBag, Edit3, Loader2, ShieldCheck, UserCog, Ban, CheckCircle } from 'lucide-react';
 import type { User, Order, Address } from '@/lib/types';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { doc, getDoc, collection, query, where, getDocs, orderBy, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
-import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from '@/components/ui/input';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { updateCustomerRoleAction, toggleCustomerStatusAction } from './actions';
 
 const customerInfoFormSchema = z.object({
   name: z.string().min(2, "Name is too short.").default(""),
   phone: z.string().optional().default(""),
-  // Address fields can be added here if making the whole address editable via this form
   street: z.string().optional().default(""),
   city: z.string().optional().default(""),
   postalCode: z.string().optional().default(""),
@@ -44,6 +45,7 @@ export default function AdminCustomerDetailPage() {
   const [loading, setLoading] = useState(true);
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [isSubmittingInfo, setIsSubmittingInfo] = useState(false);
+  const [isAdminActionLoading, setIsAdminActionLoading] = useState(false);
 
   const form = useForm<CustomerInfoFormValues>({
     resolver: zodResolver(customerInfoFormSchema),
@@ -56,14 +58,14 @@ export default function AdminCustomerDetailPage() {
     const fetchCustomerData = async () => {
       setLoading(true);
       try {
-        const customerDocRef = doc(db, "users", customerId);
+        const customerDocRef = doc(db!, "users", customerId);
         const customerSnap = await getDoc(customerDocRef);
         if (customerSnap.exists()) {
           const customerData = { id: customerSnap.id, ...customerSnap.data() } as User;
           setCustomer(customerData);
           form.reset({
             name: customerData.name || "",
-            phone: customerData.shippingAddress?.phone || customerData.phone || "", // Prefer shippingAddress.phone, fallback to user.phone
+            phone: customerData.shippingAddress?.phone || customerData.phone || "",
             street: customerData.shippingAddress?.street || "",
             city: customerData.shippingAddress?.city || "",
             postalCode: customerData.shippingAddress?.postalCode || "",
@@ -74,21 +76,20 @@ export default function AdminCustomerDetailPage() {
           router.push("/admin/customers");
         }
 
-        const ordersQuery = query(collection(db, "orders"), where("userId", "==", customerId), orderBy("orderDate", "desc"));
+        const ordersQuery = query(collection(db!, "orders"), where("userId", "==", customerId), orderBy("orderDate", "desc"));
         const ordersSnapshot = await getDocs(ordersQuery);
         const fetchedOrders = ordersSnapshot.docs.map(d => {
             const data = d.data();
             return {
                 ...data,
                 id: d.id,
-                orderDate: (data.orderDate.toDate ? data.orderDate.toDate() : new Date(data.orderDate)).toISOString(),
+                orderDate: data.orderDate?.toDate ? data.orderDate.toDate().toISOString() : new Date(data.orderDate).toISOString(),
             } as Order;
         });
         setOrders(fetchedOrders);
 
       } catch (error) {
         console.error("Error fetching customer data:", error);
-        toast({ title: "Error", description: "Could not fetch customer data.", variant: "destructive" });
       }
       setLoading(false);
     };
@@ -100,16 +101,16 @@ export default function AdminCustomerDetailPage() {
     if (!customer) return;
     setIsSubmittingInfo(true);
     try {
-      const userDocRef = doc(db, "users", customer.id);
+      const userDocRef = doc(db!, "users", customer.id);
       const updatedData: Partial<User> = {
         name: data.name,
-        phone: data.phone, // Assuming a top-level phone field on User type for direct contact
+        phone: data.phone,
         shippingAddress: {
-          street: data.street || customer.shippingAddress?.street || "",
-          city: data.city || customer.shippingAddress?.city || "",
-          postalCode: data.postalCode || customer.shippingAddress?.postalCode || "",
-          country: data.country || customer.shippingAddress?.country || "Kenya",
-          // phone: data.phone // Or keep phone separate if it's primary contact
+          street: data.street || '',
+          city: data.city || '',
+          postalCode: data.postalCode || '',
+          country: data.country || 'Kenya',
+          phone: data.phone
         }
       };
       await updateDoc(userDocRef, updatedData);
@@ -117,36 +118,39 @@ export default function AdminCustomerDetailPage() {
       toast({ title: "Success", description: "Customer information updated." });
       setIsEditingInfo(false);
     } catch (error) {
-      console.error("Error updating customer info:", error);
-      toast({ title: "Error", description: "Failed to update customer information.", variant: "destructive" });
+      toast({ title: "Error", description: "Failed to update profile.", variant: "destructive" });
     }
     setIsSubmittingInfo(false);
   };
   
-  // Mock actions for role/status - these would call Cloud Functions
-  const handleRoleChange = (newRole: 'user' | 'admin') => {
+  const handleRoleChange = async (newRole: 'user' | 'admin') => {
     if (!customer) return;
-    console.log(`ADMIN ACTION: Change role of ${customer.name} to ${newRole} (requires Cloud Function)`);
-    toast({
-      title: "Action Required (Mock)",
-      description: `Would change role of ${customer.name} to ${newRole}. This needs a Cloud Function.`,
-    });
-    // Mock update client-side for UI feedback
-    // setCustomer(prev => prev ? { ...prev, role: newRole } : null);
+    setIsAdminActionLoading(true);
+    const result = await updateCustomerRoleAction(customer.id, newRole);
+    if (result.success) {
+      setCustomer(prev => prev ? { ...prev, role: newRole } : null);
+      toast({ title: "Role Updated", description: `${customer.name} is now a platform ${newRole}.` });
+    } else {
+      toast({ title: "Action Failed", description: result.error, variant: "destructive" });
+    }
+    setIsAdminActionLoading(false);
   };
 
-  const handleAccountStatusToggle = () => {
+  const handleAccountStatusToggle = async () => {
     if (!customer) return;
-    const newStatus = customer.disabled ? "Enable" : "Disable"; // Assuming 'disabled' field
-    console.log(`ADMIN ACTION: ${newStatus} account for ${customer.name} (requires Cloud Function)`);
-    toast({
-      title: "Action Required (Mock)",
-      description: `Would ${newStatus} account for ${customer.name}. This needs a Cloud Function.`,
-    });
-    // Mock update client-side for UI feedback
-    // setCustomer(prev => prev ? { ...prev, disabled: !prev.disabled } : null);
+    setIsAdminActionLoading(true);
+    const result = await toggleCustomerStatusAction(customer.id, !!customer.disabled);
+    if (result.success) {
+      setCustomer(prev => prev ? { ...prev, disabled: result.newStatus } : null);
+      toast({ 
+        title: result.newStatus ? "Account Disabled" : "Account Enabled", 
+        description: `Security status updated for ${customer.name}.` 
+      });
+    } else {
+      toast({ title: "Action Failed", description: result.error, variant: "destructive" });
+    }
+    setIsAdminActionLoading(false);
   };
-
 
   if (loading) {
     return (
@@ -156,99 +160,94 @@ export default function AdminCustomerDetailPage() {
                 <Skeleton className="h-10 w-36" />
             </div>
             <div className="grid md:grid-cols-3 gap-6 items-start">
-                <Card className="md:col-span-1 shadow-lg"><CardHeader className="items-center text-center"><Skeleton className="h-24 w-24 rounded-full mb-3" /><Skeleton className="h-6 w-3/4 mb-1" /><Skeleton className="h-4 w-full mb-3" /><div className="mt-3 space-x-2"><Skeleton className="h-9 w-28 inline-block" /><Skeleton className="h-9 w-36 inline-block" /></div></CardHeader><Separator /><CardContent className="pt-4 space-y-2"><Skeleton className="h-5 w-full" /><Skeleton className="h-5 w-full" /></CardContent></Card>
-                <div className="md:col-span-2 space-y-6"><Card><CardHeader><Skeleton className="h-5 w-1/3" /></CardHeader><CardContent><Skeleton className="h-20 w-full" /></CardContent></Card><Card><CardHeader><Skeleton className="h-5 w-1/2" /></CardHeader><CardContent><Skeleton className="h-24 w-full" /></CardContent></Card></div>
+                <Card className="md:col-span-1 shadow-lg"><CardHeader className="items-center text-center"><Skeleton className="h-24 w-24 rounded-full mb-3" /><Skeleton className="h-6 w-3/4 mb-1" /><Skeleton className="h-4 w-full mb-3" /></CardHeader><Separator /><CardContent className="pt-4 space-y-2"><Skeleton className="h-5 w-full" /><Skeleton className="h-5 w-full" /></CardContent></Card>
+                <div className="md:col-span-2 space-y-6"><Card><CardHeader><Skeleton className="h-5 w-1/3" /></CardHeader><CardContent><Skeleton className="h-20 w-full" /></CardContent></Card></div>
             </div>
         </div>
     );
   }
 
-
-  if (!customer) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <UserCircle size={48} className="text-muted-foreground mb-4" />
-        <h2 className="text-2xl font-semibold mb-2">Customer Not Found</h2>
-        <p className="text-muted-foreground mb-4">The customer with ID "{customerId}" could not be found.</p>
-        <Button asChild variant="outline">
-          <Link href="/admin/customers">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Customers
-          </Link>
-        </Button>
-      </div>
-    );
-  }
+  if (!customer) return null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-        <h1 className="text-2xl lg:text-3xl font-bold text-primary flex items-center">
-          <UserCircle size={30} className="mr-3 text-accent" /> Customer Details
-        </h1>
-        <Button asChild variant="outline">
+    <div className="space-y-8 pb-24">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-heading text-secondary">Customer Hub</h1>
+          <p className="text-[10px] uppercase tracking-widest font-bold text-primary">ID: {customer.id}</p>
+        </div>
+        <Button asChild variant="outline" className="border-secondary">
           <Link href="/admin/customers">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Customers
+            <ArrowLeft className="mr-2 h-4 w-4" /> BACK TO COMMUNITY
           </Link>
         </Button>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6 items-start">
-        <Card className="md:col-span-1 shadow-lg">
-          <CardHeader className="items-center text-center">
-            <Avatar className="h-24 w-24 mb-3 border-2 border-primary">
-              <AvatarImage src={customer.profilePictureUrl || `https://placehold.co/100x100.png?text=${customer.name?.substring(0,1)}`} alt={customer.name} data-ai-hint={customer.dataAiHint || 'avatar person'}/>
-              <AvatarFallback className="text-3xl bg-muted">{customer.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
-            </Avatar>
-            <CardTitle className="text-xl">{customer.name}</CardTitle>
-            <CardDescription>{customer.email}</CardDescription>
-            <div className="mt-3 space-x-2">
-                <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90 text-primary-foreground" onClick={() => setIsEditingInfo(prev => !prev)}>
-                    <Edit3 size={14} className="mr-2" /> {isEditingInfo ? "Cancel Edit" : "Edit Info"}
+      <div className="grid lg:grid-cols-3 gap-8 items-start">
+        <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
+          <CardHeader className="items-center text-center p-8 bg-secondary/5">
+            <div className="relative mb-4">
+              <Avatar className="h-32 w-32 border-4 border-primary/20 shadow-xl">
+                <AvatarImage src={customer.profilePictureUrl || customer.photoURL || `https://placehold.co/128x128.png?text=${customer.name?.charAt(0)}`} alt={customer.name} />
+                <AvatarFallback className="text-4xl bg-muted">{customer.name?.substring(0, 2).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              {customer.role === 'admin' && (
+                <div className="absolute -top-2 -right-2 bg-primary text-white p-2 rounded-full shadow-lg">
+                  <ShieldCheck size={20} />
+                </div>
+              )}
+            </div>
+            <CardTitle className="text-2xl font-heading text-secondary">{customer.name}</CardTitle>
+            <p className="text-sm text-muted-foreground">{customer.email}</p>
+            <div className="mt-6 flex flex-col w-full gap-3">
+                <Button className="w-full bg-primary text-white font-bold tracking-widest h-12" onClick={() => setIsEditingInfo(prev => !prev)}>
+                    <Edit3 size={16} className="mr-2" /> {isEditingInfo ? "CANCEL REFINEMENT" : "REFINE PROFILE"}
                 </Button>
             </div>
           </CardHeader>
-          <Separator />
-          <CardContent className="pt-4 text-sm space-y-2">
-             <div className="flex items-center capitalize">
-                {customer.role === 'admin' ? <ShieldCheck size={16} className="mr-2 text-primary"/> : <UserCog size={16} className="mr-2 text-muted-foreground"/>}
-                Role: <span className="font-medium ml-1">{customer.role || 'User'}</span>
+          <Separator className="bg-primary/5" />
+          <CardContent className="p-8 space-y-4">
+             <div className="flex items-center justify-between text-xs uppercase font-bold tracking-widest text-secondary/60">
+                <span>PLATFORM ROLE</span>
+                <Badge variant={customer.role === 'admin' ? "default" : "secondary"} className="rounded-sm">
+                  {customer.role || 'user'}
+                </Badge>
             </div>
-             <div className="flex items-center">
-                {customer.disabled ? <Ban size={16} className="mr-2 text-destructive"/> : <CheckCircle size={16} className="mr-2 text-green-500"/>}
-                Status: <span className="font-medium ml-1">{customer.disabled ? 'Disabled' : 'Active'} (Mock)</span>
+             <div className="flex items-center justify-between text-xs uppercase font-bold tracking-widest text-secondary/60">
+                <span>LOGISTICS STATUS</span>
+                <Badge className={customer.disabled ? "bg-destructive text-white" : "bg-green-600 text-white"}>
+                  {customer.disabled ? 'DISABLED' : 'ACTIVE'}
+                </Badge>
             </div>
-            <p className="text-xs text-muted-foreground pt-2">Member since: {customer.createdAt ? (typeof customer.createdAt === 'string' ? new Date(customer.createdAt) : customer.createdAt.toDate()).toLocaleDateString() : 'N/A'}</p>
+            <p className="text-[10px] text-muted-foreground pt-4 text-center">MEMBER SINCE: {customer.createdAt ? (typeof customer.createdAt === 'string' ? new Date(customer.createdAt) : (customer.createdAt as any).toDate()).toLocaleDateString() : 'N/A'}</p>
           </CardContent>
         </Card>
 
-        <div className="md:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-8">
           {isEditingInfo && (
-            <Card className="shadow-md">
-              <CardHeader>
-                <CardTitle className="text-lg">Edit Customer Information</CardTitle>
+            <Card className="shadow-2xl border-none rounded-2xl overflow-hidden animate-in fade-in slide-in-from-top-4">
+              <CardHeader className="bg-secondary text-background p-8">
+                <CardTitle className="text-xl font-heading">Refine Personal Data</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-8">
                 <Form {...form}>
-                  <form onSubmit={form.handleSubmit(handleInfoSubmit)} className="space-y-4">
+                  <form onSubmit={form.handleSubmit(handleInfoSubmit)} className="space-y-6">
                     <FormField control={form.control} name="name" render={({ field }) => (
-                      <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                      <FormItem><FormLabel className="text-[10px] uppercase font-bold tracking-widest">Full Name</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
                     )} />
-                    <FormField control={form.control} name="phone" render={({ field }) => (
-                      <FormItem><FormLabel>Phone</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                    <FormField control={form.control} name="street" render={({ field }) => (
-                      <FormItem><FormLabel>Street Address</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
-                    )} />
-                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <FormField control={form.control} name="city" render={({ field }) => (
-                        <FormItem><FormLabel>City</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
-                        )} />
-                        <FormField control={form.control} name="postalCode" render={({ field }) => (
-                        <FormItem><FormLabel>Postal Code</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
-                        )} />
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <FormField control={form.control} name="phone" render={({ field }) => (
+                        <FormItem><FormLabel className="text-[10px] uppercase font-bold tracking-widest">Phone</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                      )} />
+                      <FormField control={form.control} name="city" render={({ field }) => (
+                        <FormItem><FormLabel className="text-[10px] uppercase font-bold tracking-widest">City</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                      )} />
                     </div>
-                    <Button type="submit" disabled={isSubmittingInfo} className="bg-primary hover:bg-primary/90">
-                      {isSubmittingInfo && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Save Changes
+                    <FormField control={form.control} name="street" render={({ field }) => (
+                      <FormItem><FormLabel className="text-[10px] uppercase font-bold tracking-widest">Street Address</FormLabel><FormControl><Input {...field} disabled={isSubmittingInfo} /></FormControl><FormMessage /></FormItem>
+                    )} />
+                    <Button type="submit" disabled={isSubmittingInfo} className="h-12 px-8 bg-primary text-white font-bold tracking-widest">
+                      {isSubmittingInfo ? <Loader2 className="mr-2 h-4 w-4 animate-spin"/> : "SYNC PROFILE"}
                     </Button>
                   </form>
                 </Form>
@@ -256,69 +255,74 @@ export default function AdminCustomerDetailPage() {
             </Card>
           )}
           
-          <Card className="shadow-md">
-            <CardHeader>
-                <CardTitle className="text-lg flex items-center"><ShieldCheck size={18} className="mr-2 text-primary/80"/>Admin Actions (Mock)</CardTitle>
+          <Card className="shadow-2xl border-none rounded-2xl overflow-hidden bg-card">
+            <CardHeader className="bg-primary text-white p-8">
+                <CardTitle className="text-xl font-heading flex items-center"><ShieldCheck size={24} className="mr-3 text-accent"/>Command Center Actions</CardTitle>
+                <CardDescription className="text-white/70 tracking-widest uppercase text-[10px] font-bold">Secure Administrative Privileges</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-                <div>
-                    <Label htmlFor="role-select">Change Role (Requires Cloud Function)</Label>
+            <CardContent className="p-8 space-y-8">
+                <div className="space-y-4">
+                    <Label className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Modify Heritage Access Level</Label>
                     <Select 
                         defaultValue={customer.role || 'user'}
                         onValueChange={(value) => handleRoleChange(value as 'user' | 'admin')}
+                        disabled={isAdminActionLoading}
                     >
-                        <SelectTrigger id="role-select" className="mt-1">
-                            <SelectValue placeholder="Select role..." />
+                        <SelectTrigger className="h-12 border-2 border-primary/10 focus:ring-primary rounded-xl">
+                            <SelectValue placeholder="Select platform role..." />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="user">User</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="user">Standard Seeker (User)</SelectItem>
+                            <SelectItem value="admin">Platform Curator (Admin)</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
-                <Button 
-                    variant={customer.disabled ? "outline" : "destructive"} 
-                    onClick={handleAccountStatusToggle}
-                    className="w-full"
-                >
-                    {customer.disabled ? <CheckCircle size={16} className="mr-2"/> : <Ban size={16} className="mr-2"/>}
-                    {customer.disabled ? 'Enable Account' : 'Disable Account'} (Requires Cloud Function)
-                </Button>
-                 <p className="text-xs text-muted-foreground">Note: Role and status changes are mocked and need backend Cloud Functions for real implementation.</p>
+
+                <div className="pt-4">
+                  <Button 
+                      variant={customer.disabled ? "outline" : "destructive"} 
+                      onClick={handleAccountStatusToggle}
+                      disabled={isAdminActionLoading}
+                      className="w-full h-14 font-bold tracking-[0.2em] shadow-xl"
+                  >
+                      {isAdminActionLoading ? <Loader2 className="animate-spin mr-2" /> : customer.disabled ? <CheckCircle size={20} className="mr-2"/> : <Ban size={20} className="mr-2"/>}
+                      {customer.disabled ? 'RECLAIM ACCOUNT (ENABLE)' : 'DECOMMISSION ACCOUNT (DISABLE)'}
+                  </Button>
+                  <p className="text-[10px] text-center text-muted-foreground uppercase font-bold tracking-tighter mt-4">
+                    Note: These actions are synchronized with Firebase Auth & Firestore Identity Tunnels.
+                  </p>
+                </div>
             </CardContent>
           </Card>
 
-          <Card className="shadow-md">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center"><ShoppingBag size={18} className="mr-2 text-primary/80"/>Recent Orders</CardTitle>
+          <Card className="shadow-2xl border-none rounded-2xl overflow-hidden">
+            <CardHeader className="bg-secondary text-background p-8">
+              <CardTitle className="text-xl font-heading flex items-center"><ShoppingBag size={24} className="mr-3 text-primary"/>Logistics History</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-8">
               {orders.length > 0 ? (
-                <ul className="space-y-3">
-                  {orders.slice(0, 5).map(order => (
-                    <li key={order.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-3 border rounded-md bg-muted/30 gap-2 sm:gap-0">
+                <div className="space-y-4">
+                  {orders.map(order => (
+                    <div key={order.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 border-2 border-primary/5 rounded-2xl bg-primary/5 gap-4">
                       <div>
-                        <Link href={`/admin/orders/${order.id}`} className="font-medium text-primary hover:underline">Order #{order.id.substring(0,8)}...</Link>
-                        <p className="text-xs text-muted-foreground">{new Date(order.orderDate).toLocaleDateString()}</p>
+                        <Link href={`/admin/orders/${order.id}`} className="font-heading text-lg text-secondary hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">Order #{order.id.substring(0,8)}</Link>
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mt-1">{new Date(order.orderDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                       </div>
                       <div className="text-left sm:text-right w-full sm:w-auto">
-                        <p className="font-semibold">KSh {order.totalAmount.toLocaleString()}</p>
-                        <Badge variant={
-                            order.status === 'Delivered' ? 'default' :
-                            order.status === 'Shipped' ? 'secondary' :
-                            order.status === 'Pending' ? 'outline' : 'destructive'
-                        } className={`text-xs ${
-                            order.status === 'Delivered' ? 'bg-green-100 text-green-700' :
-                            order.status === 'Shipped' ? 'bg-blue-100 text-blue-700' :
-                            order.status === 'Pending' ? 'bg-yellow-100 text-yellow-700' :
-                            'bg-red-100 text-red-700'
+                        <p className="font-heading text-primary font-bold text-xl">KSh {order.totalAmount.toLocaleString()}</p>
+                        <Badge variant="outline" className={`text-[10px] font-bold mt-2 uppercase tracking-widest ${
+                            order.status === 'Delivered' ? 'border-green-200 text-green-600 bg-green-50' :
+                            'border-primary/20 text-primary bg-primary/5'
                         }`}>{order.status}</Badge>
                       </div>
-                    </li>
+                    </div>
                   ))}
-                </ul>
+                </div>
               ) : (
-                <p className="text-muted-foreground">No orders found for this customer.</p>
+                <div className="py-12 text-center opacity-20 flex flex-col items-center">
+                  <ShoppingBag size={48} className="mb-4" />
+                  <p className="font-heading text-xl">No heritage logistics found.</p>
+                </div>
               )}
             </CardContent>
           </Card>

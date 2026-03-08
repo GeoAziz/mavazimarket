@@ -82,8 +82,24 @@ export default function AdminAddProductPage() {
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files) {
       const filesArray = Array.from(event.target.files);
-      setImageFiles(prevFiles => [...prevFiles, ...filesArray]);
-      const newPreviews = filesArray.map(file => URL.createObjectURL(file));
+      
+      // Basic Validation
+      const validFiles = filesArray.filter(file => {
+        const isValidType = ['image/jpeg', 'image/png', 'image/webp'].includes(file.type);
+        const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB
+        return isValidType && isValidSize;
+      });
+
+      if (validFiles.length !== filesArray.length) {
+        toast({
+          title: "Invalid Media",
+          description: "Some files were rejected. Please use JPG/PNG/WebP under 5MB.",
+          variant: "destructive"
+        });
+      }
+
+      setImageFiles(prevFiles => [...prevFiles, ...validFiles]);
+      const newPreviews = validFiles.map(file => URL.createObjectURL(file));
       setImagePreviews(prevPreviews => [...prevPreviews, ...newPreviews]);
     }
   };
@@ -119,7 +135,8 @@ export default function AdminAddProductPage() {
         tags: data.tags ? data.tags.split(',').map(t => t.trim()).filter(t => t) : [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        averageRating: 0, 
+        averageRating: 0,
+        reviewCount: 0,
       };
 
       if (!db) throw new Error("Logistics failure: Database not connected.");
@@ -190,13 +207,13 @@ export default function AdminAddProductPage() {
                         <Input 
                           type="file" 
                           multiple 
-                          accept="image/*"
+                          accept="image/jpeg,image/png,image/webp"
                           onChange={handleImageChange} 
                           disabled={isSubmitting} 
                           className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-xs file:font-bold file:bg-primary/10 file:text-primary hover:file:bg-primary/20 cursor-pointer"
                         />
                       </FormControl>
-                      <FormDescription className="text-[10px] uppercase tracking-tighter">The first image will define the storefront character.</FormDescription>
+                      <FormDescription className="text-[10px] uppercase tracking-tighter">JPG, PNG, WebP up to 5MB. First image defines storefront character.</FormDescription>
                     </FormItem>
                     {imagePreviews.length > 0 && (
                       <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
@@ -269,7 +286,7 @@ export default function AdminAddProductPage() {
                     <FormField control={form.control} name="isPublished" render={({ field }) => (
                         <FormItem className="flex flex-row items-center justify-between rounded-xl border-2 border-primary/5 p-4 bg-primary/5">
                             <div className="space-y-0.5">
-                                <FormLabel className="text-secondary font-bold text-xs">LIVE ON STOREFRONT</FormLabel>
+                                <FormLabel className="text-secondary font-bold text-xs uppercase">Live on Storefront</FormLabel>
                                 <FormDescription className="text-[10px] uppercase tracking-tighter">Immediate shopper discovery</FormDescription>
                             </div>
                             <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} disabled={isSubmitting} /></FormControl>

@@ -20,6 +20,7 @@ const emailStyles = `
   .header { text-align: center; margin-bottom: 32px; border-bottom: 2px solid ${BRAND_PRIMARY}; padding-bottom: 16px; }
   .header h1 { color: ${BRAND_PRIMARY}; font-size: 28px; margin: 0; font-family: 'DM Serif Display', serif; }
   .content-section { margin-bottom: 24px; }
+  .status-badge { display: inline-block; padding: 8px 16px; background-color: ${BRAND_PRIMARY}; color: #ffffff; border-radius: 20px; font-weight: bold; text-transform: uppercase; font-size: 14px; }
   .button-cta { background-color: ${BRAND_PRIMARY}; color: #ffffff !important; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-size: 16px; font-weight: bold; display: inline-block; text-transform: uppercase; letter-spacing: 1px; }
   .footer { font-size: 12px; text-align: center; color: #666666; margin-top: 40px; padding-top: 20px; border-top: 1px solid #eeeeee; }
   table { width: 100%; border-collapse: collapse; margin: 20px 0; }
@@ -78,13 +79,47 @@ export async function sendOrderConfirmationEmail(email: string, order: Order, cu
       `,
     });
 
-    if (error) {
-      console.error("Resend Error:", error);
-      return { success: false, error };
-    }
+    if (error) return { success: false, error };
     return { success: true, data };
   } catch (err) {
-    console.error("Email Service Error:", err);
+    return { success: false, error: err };
+  }
+}
+
+export async function sendOrderStatusUpdateEmail(email: string, order: Order, customerName: string) {
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'Mavazi Market <logistics@mavazimarket.com>',
+      to: email,
+      subject: `Order Update: #${order.id.substring(0, 8)} is ${order.status}`,
+      html: `
+        <html><head><style>${emailStyles}</style></head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>MAVAZI MARKET</h1>
+            </div>
+            <div class="content-section" style="text-align: center;">
+              <p>Hello ${customerName},</p>
+              <p>Your heritage journey has reached a new milestone.</p>
+              <div class="status-badge">${order.status}</div>
+              <p style="margin-top: 24px;"><strong>Order ID:</strong> ${order.id.substring(0, 8)}</p>
+              ${order.trackingNumber ? `<p><strong>Tracking Number:</strong> ${order.trackingNumber}</p>` : ''}
+            </div>
+            <div style="text-align: center; margin-top: 32px;">
+              <a href="${process.env.NEXT_PUBLIC_APP_URL}/profile" class="button-cta">View Live Tracking</a>
+            </div>
+            <div class="footer">
+              <p>&copy; ${new Date().getFullYear()} Mavazi Market. Nairobi to the World.</p>
+            </div>
+          </div>
+        </body></html>
+      `,
+    });
+
+    if (error) return { success: false, error };
+    return { success: true, data };
+  } catch (err) {
     return { success: false, error: err };
   }
 }
