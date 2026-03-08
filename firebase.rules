@@ -1,0 +1,84 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Products: Anyone can read. Admins can write.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.admin == true; // Requires admin custom claim
+
+      // Reviews subcollection under products
+      match /reviews/{reviewId} {
+        allow read: if true;
+        // Logged-in users can create reviews, ensuring the review's userId matches their own
+        allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+        // Users can only update/delete their own reviews
+        allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
+      }
+    }
+
+    // Categories: Anyone can read. Admins can write.
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.token.admin == true; // Requires admin custom claim
+    }
+
+    // Users:
+    match /users/{userId} {
+      // A user can only create their own document.
+      // The document ID must match their UID, and the 'id' and 'email' fields in the document must also match.
+      allow create: if request.auth != null &&
+                       request.auth.uid == userId &&
+                       request.resource.data.id == request.auth.uid &&
+                       request.resource.data.email == request.auth.token.email;
+
+      // A user can read and update their own document.
+      // An admin can also read and update any user document.
+      allow read, update: if request.auth != null && 
+                                    (request.auth.uid == userId || request.auth.token.admin == true);
+      // A user can delete their own document.
+      allow delete: if request.auth != null && request.auth.uid == userId;
+      // Admins can list user documents.
+      allow list: if request.auth != null && request.auth.token.admin == true; 
+
+      // CartItems subcollection for each user
+      match /cartItems/{cartItemId} {
+        // User can read, create, update, and delete items in their own cart
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+
+    // Orders:
+    match /orders/{orderId} {
+      // User can create their own order, ensuring the order's userId matches their own
+      allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
+      // User can read/update their own orders. Admin can read/update all orders.
+      allow read, update: if request.auth != null && 
+                           (resource.data.userId == request.auth.uid || request.auth.token.admin == true);
+      // Admins can list and delete any order.
+      allow list, delete: if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // Discounts: Authenticated users can read. Admins can write.
+    match /discounts/{discountId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // Settings: Publicly readable for general settings. Admins can write.
+    match /settings/{settingId} {
+      allow read: if true; 
+      allow write: if request.auth != null && request.auth.token.admin == true;
+    }
+
+    // REMOVED Unused top-level carts collection rule
+    // match /carts/{cartId} { ... }
+
+    // Fallback: Deny all other access by default for security.
+    // Any path not explicitly matched above will be denied.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

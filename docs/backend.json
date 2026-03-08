@@ -1,0 +1,118 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "The central identity document for a Mavazi Market customer or admin.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "name": { "type": "string" },
+        "firstName": { "type": "string" },
+        "lastName": { "type": "string" },
+        "phone": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "isBlocked": { "type": "boolean" },
+        "photoURL": { "type": "string" },
+        "wishlist": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role"]
+    },
+    "Address": {
+      "title": "Shipping Address",
+      "description": "Detailed shipping destination for a user.",
+      "type": "object",
+      "properties": {
+        "street": { "type": "string" },
+        "city": { "type": "string" },
+        "postalCode": { "type": "string" },
+        "country": { "type": "string" },
+        "phone": { "type": "string" }
+      }
+    },
+    "Product": {
+      "title": "Product Heritage",
+      "description": "A single design item in the marketplace.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "slug": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "comparePrice": { "type": "number" },
+        "images": { "type": "array", "items": { "type": "string" } },
+        "category": { "type": "string" },
+        "subcategory": { "type": "string" },
+        "sizes": { "type": "array", "items": { "type": "string" } },
+        "colors": { "type": "array", "items": { "type": "string" } },
+        "material": { "type": "string" },
+        "brand": { "type": "string" },
+        "stockQuantity": { "type": "number" },
+        "isPublished": { "type": "boolean" },
+        "isFeatured": { "type": "boolean" },
+        "averageRating": { "type": "number" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "Order": {
+      "title": "Customer Order",
+      "description": "Records a purchase lifecycle.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"] },
+        "totalAmount": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "mpesaTransactionId": { "type": "string" },
+        "items": { "type": "array" },
+        "shippingAddress": { "$ref": "#/backend/entities/Address" },
+        "orderDate": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Review": {
+      "title": "Product Review",
+      "description": "Customer feedback on a specific product.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["email"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Root user profile document."
+    },
+    "/users/{userId}/addresses/{addressId}": {
+      "schema": "Address",
+      "description": "Sub-collection for multiple shipping addresses."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Core product catalog."
+    },
+    "/products/{productId}/reviews/{reviewId}": {
+      "schema": "Review",
+      "description": "Customer reviews for a product."
+    },
+    "/orders/{orderId}": {
+      "schema": "Order",
+      "description": "Purchased orders collection."
+    },
+    "/settings/general": {
+      "schema": "object",
+      "description": "Global storefront configuration."
+    }
+  }
+}

@@ -1,0 +1,49 @@
+
+{
+  "hero": {
+    "url": "https://picsum.photos/seed/mavazi-hero/1600/900",
+    "width": 1600,
+    "height": 900,
+    "alt": "Mavazi Market Heritage Collection",
+    "dataAiHint": "kenyan fashion"
+  },
+  "categories": {
+    "men": {
+      "url": "https://picsum.photos/seed/mavazi-men/800/1000",
+      "width": 800,
+      "height": 1000,
+      "alt": "Men's Heritage Collection",
+      "dataAiHint": "mens fashion"
+    },
+    "women": {
+      "url": "https://picsum.photos/seed/mavazi-women/800/1000",
+      "width": 800,
+      "height": 1000,
+      "alt": "Women's Elegance Collection",
+      "dataAiHint": "womens fashion"
+    },
+    "kids": {
+      "url": "https://picsum.photos/seed/mavazi-kids/800/1000",
+      "width": 800,
+      "height": 1000,
+      "alt": "Kids' Discovery Collection",
+      "dataAiHint": "kids fashion"
+    }
+  },
+  "products": {
+    "default": {
+      "url": "https://picsum.photos/seed/mavazi-product/600/800",
+      "width": 600,
+      "height": 800,
+      "alt": "Heritage Design",
+      "dataAiHint": "clothing item"
+    }
+  },
+  "avatar": {
+    "url": "https://picsum.photos/seed/mavazi-avatar/200/200",
+    "width": 200,
+    "height": 200,
+    "alt": "User Profile",
+    "dataAiHint": "person portrait"
+  }
+}

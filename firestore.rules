@@ -1,0 +1,70 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
+         request.auth.token.admin == true);
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Products: Publicly readable. Only admins can write.
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin();
+
+      // Reviews: Publicly readable. Logged-in users can create. Owners can update/delete.
+      match /reviews/{reviewId} {
+        allow read: if true;
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isOwner(resource.data.userId) || isAdmin();
+      }
+    }
+
+    // Categories: Publicly readable. Only admins can write.
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Users: Users can read/write their own profile. Admins can manage all.
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if isOwner(userId) || isAdmin();
+      
+      // Cart items sub-collection
+      match /cartItems/{itemId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // Orders: Users can read their own. Admins can read/update all.
+    match /orders/{orderId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow update: if isAdmin();
+      allow delete: if false; // Orders should never be deleted for audit trails
+    }
+
+    // Settings: Publicly readable for theme/site info. Only admins can write.
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
