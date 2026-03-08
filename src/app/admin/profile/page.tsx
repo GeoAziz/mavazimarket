@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Input } from '@/components/ui/input';
-import { UserCircle, Edit3, KeyRound, Mail, Save, Loader2 } from 'lucide-react';
+import { UserCircle, Edit3, KeyRound, Mail, Save, Loader2, Eye, EyeOff } from 'lucide-react';
 import { mockUser } from '@/lib/mock-data'; 
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
@@ -35,6 +35,10 @@ export default function AdminProfilePage() {
   const { toast } = useToast();
   const [isProfileSubmitting, setIsProfileSubmitting] = useState(false);
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const adminUser = {
     name: "Admin User",
@@ -132,21 +136,54 @@ export default function AdminProfilePage() {
                   <FormField control={passwordForm.control} name="currentPassword" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Current Password</FormLabel>
-                      <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} /></FormControl>
+                      <FormControl>
+                        <div className="relative">
+                          <Input type={showCurrentPassword ? "text" : "password"} {...field} disabled={isPasswordSubmitting} className="pr-12" />
+                          <button
+                            type="button"
+                            onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                          >
+                            {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={passwordForm.control} name="newPassword" render={({ field }) => (
                     <FormItem>
                       <FormLabel>New Password</FormLabel>
-                      <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} /></FormControl>
+                      <FormControl>
+                        <div className="relative">
+                          <Input type={showNewPassword ? "text" : "password"} {...field} disabled={isPasswordSubmitting} className="pr-12" />
+                          <button
+                            type="button"
+                            onClick={() => setShowNewPassword(!showNewPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                          >
+                            {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />
                   <FormField control={passwordForm.control} name="confirmPassword" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Confirm New Password</FormLabel>
-                      <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} /></FormControl>
+                      <FormControl>
+                        <div className="relative">
+                          <Input type={showConfirmPassword ? "text" : "password"} {...field} disabled={isPasswordSubmitting} className="pr-12" />
+                          <button
+                            type="button"
+                            onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                            className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                          >
+                            {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                          </button>
+                        </div>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )} />

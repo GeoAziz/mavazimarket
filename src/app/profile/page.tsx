@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
-import { Edit3, History, Heart, Settings, LogOut, Package, MapPin, Mail, KeyRound, Loader2, UploadCloud, Trash2, Plus, ShieldCheck, ShoppingBag } from 'lucide-react';
+import { Edit3, History, Heart, Settings, LogOut, Package, MapPin, Mail, KeyRound, Loader2, UploadCloud, Trash2, Plus, ShieldCheck, ShoppingBag, Eye, EyeOff } from 'lucide-react';
 import { ProductCard } from '@/components/products/ProductCard';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useState, useEffect, useCallback } from 'react'; 
@@ -69,6 +69,10 @@ export default function ProfilePage() {
   const [isAddressSubmitting, setIsAddressSubmitting] = useState(false);
   const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false);
   const [isPhotoUploading, setIsPhotoUploading] = useState(false);
+
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileFormSchema),
@@ -512,7 +516,18 @@ export default function ProfilePage() {
                           <FormField control={passwordForm.control} name="currentPassword" render={({ field }) => (
                               <FormItem>
                                 <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Existing Credentials</FormLabel>
-                                <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} className="rounded-xl h-12" /></FormControl>
+                                <FormControl>
+                                  <div className="relative">
+                                    <Input type={showCurrentPassword ? "text" : "password"} {...field} disabled={isPasswordSubmitting} className="rounded-xl h-12 pr-12" />
+                                    <button
+                                      type="button"
+                                      onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                                      className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                                    >
+                                      {showCurrentPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                    </button>
+                                  </div>
+                                </FormControl>
                                 <FormMessage />
                               </FormItem>
                             )}
@@ -521,7 +536,18 @@ export default function ProfilePage() {
                             <FormField control={passwordForm.control} name="newPassword" render={({ field }) => (
                                 <FormItem>
                                   <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">New Credentials</FormLabel>
-                                  <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} className="rounded-xl h-12" /></FormControl>
+                                  <FormControl>
+                                    <div className="relative">
+                                      <Input type={showNewPassword ? "text" : "password"} {...field} disabled={isPasswordSubmitting} className="rounded-xl h-12 pr-12" />
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowNewPassword(!showNewPassword)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                                      >
+                                        {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                      </button>
+                                    </div>
+                                  </FormControl>
                                   <FormMessage />
                                 </FormItem>
                               )}
@@ -529,7 +555,18 @@ export default function ProfilePage() {
                             <FormField control={passwordForm.control} name="confirmPassword" render={({ field }) => (
                                 <FormItem>
                                   <FormLabel className="text-[10px] uppercase font-bold tracking-widest text-secondary/50">Verify New Credentials</FormLabel>
-                                  <FormControl><Input type="password" {...field} disabled={isPasswordSubmitting} className="rounded-xl h-12" /></FormControl>
+                                  <FormControl>
+                                    <div className="relative">
+                                      <Input type={showConfirmPassword ? "text" : "password"} {...field} disabled={isPasswordSubmitting} className="rounded-xl h-12 pr-12" />
+                                      <button
+                                        type="button"
+                                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                                      >
+                                        {showConfirmPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                      </button>
+                                    </div>
+                                  </FormControl>
                                   <FormMessage />
                                 </FormItem>
                               )}
