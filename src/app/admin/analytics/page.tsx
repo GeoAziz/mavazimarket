@@ -9,7 +9,7 @@ import { useEffect, useState } from 'react';
 import { collection, getDocs, query, orderBy, getCountFromServer, where, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Order } from '@/lib/types';
-import { format, parseISO, startOfMonth, endOfMonth, subMonths } from 'date-fns';
+import { format, startOfMonth, endOfMonth, subMonths } from 'date-fns';
 import { DateRangePicker } from '@/components/ui/date-range-picker'; // Assuming you have this or similar
 import type { DateRange } from 'react-day-picker';
 
@@ -86,7 +86,7 @@ export default function AdminAnalyticsPage() {
 
         const formattedSalesData = Object.entries(monthlySales)
             .map(([month, sales]) => ({ month, sales }))
-            .sort((a, b) => parseISO(new Date(a.month).toISOString()).getTime() - parseISO(new Date(b.month).toISOString()).getTime());
+            .sort((a, b) => new Date(a.month).getTime() - new Date(b.month).getTime());
 
         setSalesData(formattedSalesData);
         setLoadingChart(false);

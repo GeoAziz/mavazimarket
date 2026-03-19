@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { uploadImage } from '@/lib/storage';
 import Image from 'next/image';
+import { toDate } from '@/lib/utils';
 
 interface ProductPageProps {
   params: Promise<{ productId: string }>;
@@ -276,7 +277,7 @@ export default function ProductPage({ params }: ProductPageProps) {
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="font-bold text-secondary">{review.userName}</p>
-                              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{new Date(review.date as any).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{toDate(review.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                             </div>
                             <ReviewStars rating={review.rating} size={3} showReviewCount={false}/>
                           </div>

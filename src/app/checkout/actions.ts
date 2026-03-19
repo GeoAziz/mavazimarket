@@ -98,8 +98,8 @@ export async function placeOrderAction(
     subtotal += product.price * ref.quantity;
   }
   const shippingCost = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING_COST;
-  const taxes = (subtotal + shippingCost) * TAX_RATE;
-  const totalAmount = subtotal + shippingCost + taxes;
+  const taxes = subtotal * TAX_RATE;
+  const totalAmount = subtotal + taxes + shippingCost;
 
   // ── 4. Atomic inventory decrement + order creation (transaction) ──────────
   const shippingAddress: Address = {

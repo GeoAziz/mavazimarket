@@ -3,6 +3,9 @@ import * as admin from 'firebase-admin';
 import { mockCategories, mockProducts, mockUser, mockOrders, mockReviews } from '../src/lib/mock-data'; 
 import type { Category, Product as AppProduct, User as AppUser, Order as AppOrder, Review as AppReview } from '../src/lib/types'; 
 
+/** Opaque type for Firestore document data that may contain FieldValue sentinels. */
+type FirestoreData = Record<string, unknown>;
+
 // ── Guard: never run against production credentials by accident ──────────────
 // Use FIREBASE_ADMIN_SDK_CONFIG_JSON (a JSON string with project_id, private_key,
 // client_email) OR a SEED_ENVIRONMENT=development guard to prevent accidental
@@ -64,13 +67,13 @@ async function populateProducts() {
   console.log('Populating products...');
   const productsCollection = db.collection('products');
   for (const product of mockProducts) {
-    const { reviews, id, ...productData } = product as any; 
+    const { reviews, id, ...productData } = product as AppProduct & { reviews?: AppReview[] }; 
     const finalProductData = {
-        ...(productData as any),
+        ...productData,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    } as any;
-    const productDocRef = await productsCollection.add(finalProductData); 
+    };
+    const productDocRef = await productsCollection.add(finalProductData as FirestoreData);
     console.log(`Added product: ${product.name} (ID: ${productDocRef.id})`);
 
     if (reviews && reviews.length > 0) {
@@ -123,15 +126,15 @@ async function populateUsers() {
             console.log(`Admin custom claim ALREADY SET for ${adminEmail}.`);
         }
 
-        const adminProfileData: Partial<AppUser> = {
+        const adminProfileData = {
           name: "Admin Mavazi",
           email: adminEmail,
           role: "admin",
           disabled: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp() as any,
-          updatedAt: admin.firestore.FieldValue.serverTimestamp() as any,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
-        await usersCollection.doc(adminAuthUser.uid).set(adminProfileData, { merge: true });
+        await usersCollection.doc(adminAuthUser.uid).set(adminProfileData as FirestoreData, { merge: true });
         console.log(`Stored/updated admin profile for ${adminEmail} in Firestore.`);
     }
 
@@ -161,17 +164,17 @@ async function populateUsers() {
 
     if (standardAuthUser) {
         const { id, wishlist, ...userProfileData } = mockUser;
-        const finalUserProfile: Omit<AppUser, 'id'> & { createdAt: any, updatedAt: any } = {
+        const finalUserProfile = {
             ...(userProfileData as Omit<AppUser, 'id' | 'wishlist'>),
             email: standardUserEmail, 
             name: mockUser.name,
             role: 'user',
             disabled: false,
             wishlist: wishlist || [], 
-            createdAt: admin.firestore.FieldValue.serverTimestamp() as any,
-            updatedAt: admin.firestore.FieldValue.serverTimestamp() as any,
+            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
-        await usersCollection.doc(standardAuthUser.uid).set(finalUserProfile, { merge: true });
+        await usersCollection.doc(standardAuthUser.uid).set(finalUserProfile as FirestoreData, { merge: true });
         console.log(`Stored/updated profile for ${mockUser.name} (${standardUserEmail}) in Firestore.`);
     }
 
@@ -202,14 +205,14 @@ async function populateOrders() {
 
     for (const order of mockOrders) {
         const { id, ...orderData } = order; 
-        const finalOrderData: Omit<AppOrder, 'id'> & {updatedAt: any} = {
+        const finalOrderData = {
             ...(orderData as Omit<AppOrder, 'id'>),
             userId: mockUserAuth.uid,
-            orderDate: admin.firestore.Timestamp.fromDate(new Date(order.orderDate as string)) as any,
+            orderDate: admin.firestore.Timestamp.fromDate(new Date(order.orderDate as string)),
             items: order.items.map(item => ({...item})), 
-            updatedAt: admin.firestore.FieldValue.serverTimestamp() as any,
-        } as any;
-        await ordersCollection.add(finalOrderData); 
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        };
+        await ordersCollection.add(finalOrderData as FirestoreData);
         console.log(`Added order for user ${mockUser.email}`);
     }
     console.log('Orders populated.');

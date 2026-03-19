@@ -22,7 +22,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { updateCustomerRoleAction, toggleCustomerStatusAction, sendPromotionalOfferAction } from './actions';
+import { toDate } from '@/lib/utils';
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -249,7 +250,7 @@ export default function AdminCustomerDetailPage() {
                     {customer.disabled ? 'DISABLED' : 'ACTIVE'}
                   </Badge>
               </div>
-              <p className="text-[10px] text-muted-foreground pt-4 text-center">MEMBER SINCE: {customer.createdAt ? (typeof customer.createdAt === 'string' ? new Date(customer.createdAt) : (customer.createdAt as any).toDate()).toLocaleDateString() : 'N/A'}</p>
+              <p className="text-[10px] text-muted-foreground pt-4 text-center">MEMBER SINCE: {customer.createdAt ? toDate(customer.createdAt).toLocaleDateString() : 'N/A'}</p>
             </CardContent>
           </Card>
 
@@ -373,7 +374,7 @@ export default function AdminCustomerDetailPage() {
                     <div key={order.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 border-2 border-primary/5 rounded-2xl bg-primary/5 gap-4">
                       <div>
                         <Link href={`/admin/orders/${order.id}`} className="font-heading text-lg text-secondary hover:text-primary transition-colors underline decoration-primary/30 underline-offset-4">Order #{order.id.substring(0,8)}</Link>
-                        <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mt-1">{new Date(order.orderDate as any).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                        <p className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground mt-1">{toDate(order.orderDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                       </div>
                       <div className="text-left sm:text-right w-full sm:w-auto">
                         <p className="font-heading text-primary font-bold text-xl">KSh {order.totalAmount.toLocaleString()}</p>

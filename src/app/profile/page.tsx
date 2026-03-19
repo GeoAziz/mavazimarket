@@ -27,7 +27,7 @@ import { doc, getDoc, updateDoc, collection, query, where, getDocs, orderBy as f
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { uploadImage } from "@/lib/storage";
-import { formatKSh } from "@/lib/utils";
+import { formatKSh, toDate } from "@/lib/utils";
 
 const profileFormSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters."),
@@ -339,7 +339,7 @@ export default function ProfilePage() {
                           <CardHeader className="bg-secondary/5 p-6 flex flex-row justify-between items-center border-b border-primary/5">
                             <div>
                               <p className="font-bold text-secondary text-sm">ORDER #{order.id.substring(0,8)}</p>
-                              <p className="text-[10px] uppercase tracking-tighter text-muted-foreground font-bold mt-1">CURATED: {new Date(order.orderDate as any).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                              <p className="text-[10px] uppercase tracking-tighter text-muted-foreground font-bold mt-1">CURATED: {toDate(order.orderDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                             </div>
                             <div className="text-right">
                                <span className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest border-2 ${
