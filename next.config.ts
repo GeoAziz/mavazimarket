@@ -50,8 +50,11 @@ const nextConfig: NextConfig = {
 
 export default withSentryConfig(nextConfig, {
   // Sentry webpack plugin options (only applied at build time).
-  // Suppresses source-map upload warnings during local builds.
   silent: true,
-  // Automatically tree-shake Sentry logger statements in production.
-  disableLogger: true,
+  // Use the newer API instead of deprecated disableLogger.
+  webpack: {
+    treeshake: {
+      removeDebugLogging: true,
+    },
+  },
 });
