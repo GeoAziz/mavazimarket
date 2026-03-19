@@ -2,17 +2,17 @@
 "use client";
 
 import { useParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Package, User, MapPin, Truck, CreditCard, FileText, Loader2, Save, Send } from 'lucide-react';
+import { ArrowLeft, Package, User, MapPin, Truck, CreditCard, Loader2, Save, Send } from 'lucide-react';
 import type { Order, CartItem as OrderItemType, Product } from '@/lib/types';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +24,15 @@ interface EnrichedOrderItem extends OrderItemType {
   slug?: string;
   productImage?: string;
 }
+
+/** Valid next states for each current order status (mirrors the server state machine). */
+const ALLOWED_TRANSITIONS: Record<Order['status'], Order['status'][]> = {
+  Pending:    ['Processing', 'Cancelled'],
+  Processing: ['Shipped',    'Cancelled'],
+  Shipped:    ['Delivered'],
+  Delivered:  [],
+  Cancelled:  [],
+};
 
 export default function AdminOrderDetailPage() {
   const params = useParams();
@@ -214,11 +223,13 @@ export default function AdminOrderDetailPage() {
                     <SelectValue placeholder="Update status..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Pending">Pending</SelectItem>
-                    <SelectItem value="Processing">Processing</SelectItem>
-                    <SelectItem value="Shipped">Shipped</SelectItem>
-                    <SelectItem value="Delivered">Delivered</SelectItem>
-                    <SelectItem value="Cancelled">Cancelled</SelectItem>
+                    {/* Always show the current status so the selector has a value */}
+                    {order && (
+                      <SelectItem value={order.status}>{order.status} (current)</SelectItem>
+                    )}
+                    {order && ALLOWED_TRANSITIONS[order.status].map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

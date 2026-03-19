@@ -18,10 +18,11 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Separator } from "@/components/ui/separator";
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
 import Image from 'next/image';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { CreditCard, ShoppingBag, AlertTriangle, Loader2, CheckCircle2, Phone, Smartphone, ShieldCheck, Lock } from "lucide-react";
+import Link from 'next/link';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { CreditCard, ShoppingBag, Loader2, CheckCircle2, ShieldCheck, Lock, Smartphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { placeOrderAction } from "./actions";
 import { useAuth } from "@/contexts/AuthContext";
 import { useCart } from "@/contexts/CartContext";
@@ -35,6 +36,15 @@ const MPesaIcon = () => (
     <path d="M12 6v12M8 12h8" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
   </svg>
 );
+
+/** Generate a simple UUID v4 for idempotency. */
+function generateIdempotencyKey(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
 
 const checkoutFormSchema = z.object({
   fullName: z.string().min(2, "Full name must be at least 2 characters."),
@@ -55,10 +65,13 @@ export default function CheckoutPage() {
   const router = useRouter();
   const { currentUser, appUser } = useAuth();
   const { cartItems, totalAmount, clearCart, isCartLoaded } = useCart();
-  
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSTKPushActive, setIsSTKPushActive] = useState(false);
   const [stkPushTimer, setStkPushTimer] = useState(30);
+
+  // Idempotency key is generated once per checkout session and persists across retries.
+  const idempotencyKeyRef = useRef<string>(generateIdempotencyKey());
 
   const form = useForm<CheckoutFormValues>({
     resolver: zodResolver(checkoutFormSchema),
@@ -90,18 +103,27 @@ export default function CheckoutPage() {
       handleFinalizeOrder();
     }
     return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isSTKPushActive, stkPushTimer]);
 
   const handleFinalizeOrder = async () => {
     setIsSTKPushActive(false);
     setIsSubmitting(true);
-    
+
     try {
+      // Only pass item IDs and quantities – the server re-fetches prices.
+      const cartItemRefs = cartItems.map(item => ({
+        productId: item.productId || item.id,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+      }));
+
       const result = await placeOrderAction({
         userId: currentUser?.uid || null,
         formData: form.getValues(),
-        cartItems,
-        totalAmount: grandTotal,
+        cartItemRefs,
+        idempotencyKey: idempotencyKeyRef.current,
       });
 
       if (result.success) {
@@ -121,6 +143,7 @@ export default function CheckoutPage() {
     }
   };
 
+  // Display totals computed client-side for UX only; the server recomputes authoritatively.
   const subtotal = totalAmount;
   const taxes = subtotal * 0.16;
   const shipping = subtotal > 3000 ? 0 : 250;

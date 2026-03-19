@@ -4,71 +4,145 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // ── Helper functions ──────────────────────────────────────────────────────
+
     function isAuthenticated() {
       return request.auth != null;
     }
 
+    // Single source of truth: admin status comes from custom claims only.
+    // The Firestore `role` field is for display only and must NOT be used for
+    // privilege checks (prevents drift between token and Firestore).
     function isAdmin() {
-      return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || 
-         request.auth.token.admin == true);
+      return isAuthenticated() && request.auth.token.admin == true;
     }
 
     function isOwner(userId) {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
-    // Products: Publicly readable. Only admins can write.
+    // ── Field-level helpers ───────────────────────────────────────────────────
+
+    function isString(val) { return val is string; }
+    function isNumber(val) { return val is number; }
+    function isBool(val)   { return val is bool; }
+
+    // ── Order status state machine ────────────────────────────────────────────
+    // Valid transitions: Pending→Processing|Cancelled, Processing→Shipped|Cancelled,
+    //                    Shipped→Delivered. Delivered and Cancelled are terminal.
+    function isValidStatusTransition(from, to) {
+      return (from == 'Pending'    && (to == 'Processing' || to == 'Cancelled')) ||
+             (from == 'Processing' && (to == 'Shipped'    || to == 'Cancelled')) ||
+             (from == 'Shipped'    && to == 'Delivered');
+    }
+
+    // ── Product schema validation ─────────────────────────────────────────────
+    function validProduct(data) {
+      return isString(data.name) &&
+             isString(data.description) &&
+             isNumber(data.price) && data.price >= 0 &&
+             isNumber(data.stockQuantity) && data.stockQuantity >= 0 &&
+             isString(data.category) &&
+             isString(data.slug) &&
+             data.images is list;
+    }
+
+    // ── Server-owned fields that clients must not overwrite ───────────────────
+    // (averageRating, reviewCount managed by server/admin SDK only)
+    function noServerFieldChanges(data) {
+      return !('averageRating' in data) &&
+             !('reviewCount'   in data);
+    }
+
+    // ── Collections ───────────────────────────────────────────────────────────
+
+    // Products: publicly readable; admins write; clients must not touch server fields.
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isAdmin() && validProduct(request.resource.data);
+      allow update: if isAdmin() && validProduct(request.resource.data);
+      allow delete: if isAdmin();
 
-      // Reviews: Publicly readable. Logged-in users can create. Owners can update/delete.
+      // Reviews: publicly readable; authenticated users create their own.
       match /reviews/{reviewId} {
         allow read: if true;
-        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+        allow create: if isAuthenticated() &&
+                         request.resource.data.userId == request.auth.uid &&
+                         isNumber(request.resource.data.rating) &&
+                         request.resource.data.rating >= 1 &&
+                         request.resource.data.rating <= 5 &&
+                         isString(request.resource.data.comment);
         allow update, delete: if isOwner(resource.data.userId) || isAdmin();
       }
     }
 
-    // Categories: Publicly readable. Only admins can write.
+    // Categories: publicly readable; admins write.
     match /categories/{categoryId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Users: Users can read/write their own profile. Admins can manage all.
+    // Users: users manage their own profile; admins manage all.
+    // Clients must NOT set role/disabled – those are admin-only fields.
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
-      allow write: if isOwner(userId) || isAdmin();
-      
-      // Cart items sub-collection
+      // On create, block privileged fields so users cannot self-promote.
+      allow create: if (isOwner(userId) || isAdmin()) &&
+                       !('role'     in request.resource.data) &&
+                       !('disabled' in request.resource.data);
+      // On update, only admins may change role/disabled.
+      allow update: if isOwner(userId) &&
+                       !('role'     in request.resource.data) &&
+                       !('disabled' in request.resource.data) ||
+                    isAdmin();
+      allow delete: if isAdmin();
+
       match /cartItems/{itemId} {
         allow read, write: if isOwner(userId);
       }
 
-      // Address book sub-collection
       match /addresses/{addressId} {
         allow read, write: if isOwner(userId);
       }
     }
 
-    // Orders: Users can read their own. Admins can read/update all.
+    // Orders: users create their own; server/admin update.
+    // totalAmount is SERVER-COMPUTED and may never be set by the client on create.
     match /orders/{orderId} {
-      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow update: if isAdmin();
-      allow delete: if false; // Orders should never be deleted for audit trails
+      allow create: if isAuthenticated() &&
+                       request.resource.data.userId == request.auth.uid &&
+                       !('totalAmount'         in request.resource.data) &&
+                       !('trackingNumber'      in request.resource.data) &&
+                       !('paymentStatus'       in request.resource.data) &&
+                       request.resource.data.status == 'Pending';
+      allow read:   if isAuthenticated() &&
+                       (resource.data.userId == request.auth.uid || isAdmin());
+      // Status transitions are validated; totalAmount and server fields are immutable.
+      allow update: if isAdmin() &&
+                       (request.resource.data.status == resource.data.status ||
+                        isValidStatusTransition(resource.data.status, request.resource.data.status)) &&
+                       request.resource.data.totalAmount == resource.data.totalAmount;
+      allow delete: if false; // Orders are permanent for audit trails.
     }
 
-    // Settings: Publicly readable for theme/site info. Only admins can write.
+    // Idempotency keys: created and read by the server; clients have no access.
+    match /idempotencyKeys/{key} {
+      allow read, write: if false; // server-side (Admin SDK) only
+    }
+
+    // Audit log: append-only by server; admins can read.
+    match /auditLogs/{logId} {
+      allow read:  if isAdmin();
+      allow write: if false; // server-side (Admin SDK) only
+    }
+
+    // Settings: publicly readable; admins write.
     match /settings/{settingId} {
       allow read: if true;
       allow write: if isAdmin();
     }
 
-    // Default deny
+    // Default deny.
     match /{document=**} {
       allow read, write: if false;
     }

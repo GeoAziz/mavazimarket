@@ -14,7 +14,7 @@ export async function sendPasswordResetLinkAction(
 ): Promise<{ success: boolean; message: string }> {
   try {
     // Using Firebase's built-in password reset email functionality
-    await sendFirebasePasswordResetEmail(auth, data.email);
+    await sendFirebasePasswordResetEmail(auth!, data.email);
     
     // If you wanted to use your custom email template via Nodemailer (more complex setup for link generation):
     // const resetLink = `https://your-app-domain.com/reset-password?token=GENERATED_TOKEN`; // Token generation is complex

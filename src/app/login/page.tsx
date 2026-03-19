@@ -38,7 +38,7 @@ export default function LoginPage() {
   async function onSubmit(data: LoginFormValues) {
     setIsSubmitting(true);
     try {
-      const userCredential = await signInWithEmailAndPassword(auth, data.email, data.password);
+      const userCredential = await signInWithEmailAndPassword(auth!, data.email, data.password);
       const user = userCredential.user;
       
       toast({
@@ -108,7 +108,7 @@ export default function LoginPage() {
                     <FormItem>
                       <div className="flex justify-between items-center">
                         <FormLabel className="text-xs uppercase tracking-widest font-bold text-secondary/50">Password</FormLabel>
-                        <Link href="/forgot-password" size="sm" className="text-[10px] uppercase font-bold text-primary hover:text-accent transition-colors">
+                        <Link href="/forgot-password" className="text-[10px] uppercase font-bold text-primary hover:text-accent transition-colors">
                           Forgot Password?
                         </Link>
                       </div>

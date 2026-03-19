@@ -20,7 +20,7 @@ import Link from 'next/link';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
-import { formatKSh } from '@/lib/utils';
+import { formatKSh, toDate } from '@/lib/utils';
 
 const ITEMS_PER_PAGE = 10;
 
@@ -133,7 +133,7 @@ export default function AdminOrdersPage() {
                       #{order.id.substring(0,8)}...
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs font-bold uppercase tracking-tighter">
-                      {new Date(order.orderDate).toLocaleDateString()}
+                      {toDate(order.orderDate).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-secondary font-medium text-xs">
                       {order.shippingAddress?.street?.substring(0,25) || 'N/A'}

@@ -1,7 +1,8 @@
 
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label'; // Keep for non-form controlled elements
 import { Input } from '@/components/ui/input';
@@ -45,7 +46,7 @@ export default function AdminCustomizePage() {
     const fetchAppearanceSettings = async () => {
       setIsLoading(true);
       try {
-        const settingsDocRef = doc(db, "settings", SETTINGS_DOC_ID);
+        const settingsDocRef = doc(db!, "settings", SETTINGS_DOC_ID);
         const docSnap = await getDoc(settingsDocRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -75,7 +76,7 @@ export default function AdminCustomizePage() {
   async function onSubmit(data: AppearanceFormValues) {
     setIsSubmitting(true);
     try {
-      const settingsDocRef = doc(db, "settings", SETTINGS_DOC_ID);
+      const settingsDocRef = doc(db!, "settings", SETTINGS_DOC_ID);
       // Store these settings under a specific key, e.g., 'themeAppearance'
       await setDoc(settingsDocRef, { themeAppearance: data, updatedAt: Timestamp.now() }, { merge: true });
       toast({

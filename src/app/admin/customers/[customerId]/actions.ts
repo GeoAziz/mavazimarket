@@ -1,6 +1,7 @@
 'use server';
 
 import { getAdminAuth, getAdminFirestore } from '@/lib/firebase-admin';
+import { writeAuditLog } from '@/lib/auditLog';
 import { revalidatePath } from 'next/cache';
 import { Resend } from 'resend';
 
@@ -11,29 +12,42 @@ const resend = new Resend(process.env.RESEND_API_KEY);
  * Escalates or de-escalates a user's role in both Auth Custom Claims and Firestore.
  * Using Firebase Admin SDK Server Action.
  */
-export async function updateCustomerRoleAction(userId: string, newRole: 'user' | 'admin') {
+export async function updateCustomerRoleAction(userId: string, newRole: 'user' | 'admin', adminUid?: string) {
   try {
     const auth = getAdminAuth();
     const db = getAdminFirestore();
 
-    // 1. Set Custom Claims for Auth Security
+    // Fetch old role for audit log.
+    const userSnap = await db.collection('users').doc(userId).get();
+    const previousRole = userSnap.data()?.role ?? 'user';
+
+    // 1. Set Custom Claims for Auth Security (single source of truth).
     await auth.setCustomUserClaims(userId, { 
       admin: newRole === 'admin',
       role: newRole 
     });
 
-    // 2. Sync with Firestore Profile
+    // 2. Sync Firestore Profile (display only, not used for privilege checks).
     await db.collection('users').doc(userId).update({
       role: newRole,
       updatedAt: new Date().toISOString()
     });
 
+    writeAuditLog({
+      action: 'user.role_changed',
+      performedBy: adminUid ?? 'system',
+      targetId: userId,
+      targetCollection: 'users',
+      details: { previousRole, newRole },
+    }).catch(() => {});
+
     revalidatePath(`/admin/customers/${userId}`);
     revalidatePath('/admin/customers');
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error("Admin Action Failure (Role):", error);
-    return { success: false, error: error.message };
+    return { success: false, error: message };
   }
 }
 
@@ -42,7 +56,7 @@ export async function updateCustomerRoleAction(userId: string, newRole: 'user' |
  * Enables or disables a user's ability to sign in to the platform.
  * Using Firebase Admin SDK Server Action.
  */
-export async function toggleCustomerStatusAction(userId: string, currentDisabledStatus: boolean) {
+export async function toggleCustomerStatusAction(userId: string, currentDisabledStatus: boolean, adminUid?: string) {
   try {
     const auth = getAdminAuth();
     const db = getAdminFirestore();
@@ -59,10 +73,20 @@ export async function toggleCustomerStatusAction(userId: string, currentDisabled
 
     revalidatePath(`/admin/customers/${userId}`);
     revalidatePath('/admin/customers');
+
+    writeAuditLog({
+      action: 'user.status_toggled',
+      performedBy: adminUid ?? 'system',
+      targetId: userId,
+      targetCollection: 'users',
+      details: { disabled: newStatus },
+    }).catch(() => {});
+
     return { success: true, newStatus };
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
     console.error("Admin Action Failure (Status):", error);
-    return { success: false, error: error.message };
+    return { success: false, error: message };
   }
 }
 

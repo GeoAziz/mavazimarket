@@ -26,6 +26,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { uploadImage } from '@/lib/storage';
 import Image from 'next/image';
+import { toDate } from '@/lib/utils';
 
 interface ProductPageProps {
   params: Promise<{ productId: string }>;
@@ -58,7 +59,7 @@ export default function ProductPage({ params }: ProductPageProps) {
     const fetchProductAndReviews = async () => {
       setLoading(true);
       try {
-        const docRef = doc(db, "products", slug);
+        const docRef = doc(db!, "products", slug);
         const docSnap = await getDoc(docRef);
         
         if (docSnap.exists()) {
@@ -66,7 +67,7 @@ export default function ProductPage({ params }: ProductPageProps) {
           setProduct(productData);
           
           // Listen for real-time reviews with limit
-          const reviewsRef = collection(db, "products", docSnap.id, "reviews");
+          const reviewsRef = collection(db!, "products", docSnap.id, "reviews");
           const revQuery = query(reviewsRef, orderBy("date", "desc"), limit(reviewLimit));
           const unsubscribe = onSnapshot(revQuery, (snapshot) => {
             const fetchedReviews = snapshot.docs.map(d => ({
@@ -276,7 +277,7 @@ export default function ProductPage({ params }: ProductPageProps) {
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="font-bold text-secondary">{review.userName}</p>
-                              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{new Date(review.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                              <p className="text-[10px] uppercase tracking-widest text-muted-foreground">{toDate(review.date).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                             </div>
                             <ReviewStars rating={review.rating} size={3} showReviewCount={false}/>
                           </div>

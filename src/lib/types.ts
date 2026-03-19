@@ -89,10 +89,15 @@ export type Order = {
   status: 'Pending' | 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   items: CartItem[];
   totalAmount: number;
+  subtotal: number;
+  taxes: number;
+  shippingCost: number;
   shippingAddress: Address;
   paymentMethod: string;
   trackingNumber?: string;
   mpesaTransactionId?: string;
+  stripeSessionId?: string;
+  idempotencyKey?: string;
   updatedAt?: Timestamp | string;
 };
 

@@ -91,7 +91,7 @@ export default function AdminProductsPage() {
   }, [lastVisible]);
 
   useEffect(() => {
-    fetchProducts(initialFetch = true);
+    fetchProducts(true);
   }, []);
 
   const handleBulkUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
