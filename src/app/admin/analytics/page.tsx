@@ -86,7 +86,7 @@ export default function AdminAnalyticsPage() {
 
         const formattedSalesData = Object.entries(monthlySales)
             .map(([month, sales]) => ({ month, sales }))
-            .sort((a, b) => (parseISO(new Date(a.month).toISOString()) as any) - (parseISO(new Date(b.month).toISOString()) as any));
+            .sort((a, b) => parseISO(new Date(a.month).toISOString()).getTime() - parseISO(new Date(b.month).toISOString()).getTime());
 
         setSalesData(formattedSalesData);
         setLoadingChart(false);
