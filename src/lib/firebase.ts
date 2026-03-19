@@ -4,6 +4,7 @@ import { initializeApp, getApps, FirebaseApp } from "firebase/app";
 import { getAuth, Auth } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getStorage, FirebaseStorage } from "firebase/storage";
+import { initializeAppCheck, ReCaptchaV3Provider, AppCheck } from "firebase/app-check";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
@@ -20,6 +21,7 @@ let app: FirebaseApp | null = null;
 let auth: Auth | null = null;
 let db: Firestore | null = null;
 let storage: FirebaseStorage | null = null;
+let appCheck: AppCheck | null = null;
 
 if (firebaseConfig.apiKey) {
   if (getApps().length === 0) {
@@ -36,10 +38,24 @@ if (firebaseConfig.apiKey) {
     auth = getAuth(app);
     db = getFirestore(app);
     storage = getStorage(app);
+
+    // Initialize Firebase App Check (client-side only)
+    // Set NEXT_PUBLIC_RECAPTCHA_SITE_KEY in your environment variables.
+    // After testing, enable enforcement in Firebase Console → App Check.
+    if (typeof window !== "undefined" && process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY) {
+      try {
+        appCheck = initializeAppCheck(app, {
+          provider: new ReCaptchaV3Provider(process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY),
+          isTokenAutoRefreshEnabled: true,
+        });
+      } catch (e) {
+        console.error("Firebase App Check initialization error", e);
+      }
+    }
   }
 } else {
   // This message will appear in the Vercel build logs if env vars are not set.
   console.log("Firebase API key is missing. Skipping Firebase initialization during build.");
 }
 
-export { auth, db, storage };
+export { auth, db, storage, appCheck };

@@ -44,7 +44,7 @@ export default function AdminSettingsPage() {
     const fetchSettings = async () => {
       setIsLoading(true);
       try {
-        const settingsDocRef = doc(db, "settings", SETTINGS_DOC_ID);
+        const settingsDocRef = doc(db!, "settings", SETTINGS_DOC_ID);
         const docSnap = await getDoc(settingsDocRef);
         if (docSnap.exists()) {
           const data = docSnap.data();
@@ -75,7 +75,7 @@ export default function AdminSettingsPage() {
   async function onSubmit(data: SettingsFormValues) {
     setIsSubmitting(true);
     try {
-      const settingsDocRef = doc(db, "settings", SETTINGS_DOC_ID);
+      const settingsDocRef = doc(db!, "settings", SETTINGS_DOC_ID);
       await setDoc(settingsDocRef, { ...data, updatedAt: Timestamp.now() }, { merge: true });
       toast({
         title: "Settings Saved",

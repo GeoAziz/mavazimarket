@@ -35,7 +35,7 @@ export function ThemeApplicator() {
   useEffect(() => {
     const applyThemeSettings = async () => {
       try {
-        const settingsDocRef = doc(db, "settings", "general");
+        const settingsDocRef = doc(db!, "settings", "general");
         const docSnap = await getDoc(settingsDocRef);
         if (docSnap.exists()) {
           const data = docSnap.data() as SiteSettings;

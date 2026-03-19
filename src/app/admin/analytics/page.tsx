@@ -56,7 +56,7 @@ export default function AdminAnalyticsPage() {
       setLoadingChart(true);
 
       try {
-        const ordersRef = collection(db, "orders");
+        const ordersRef = collection(db!, "orders");
         // Base query for orders within the date range
         const ordersQuery = query(
           ordersRef,
@@ -86,13 +86,13 @@ export default function AdminAnalyticsPage() {
 
         const formattedSalesData = Object.entries(monthlySales)
             .map(([month, sales]) => ({ month, sales }))
-            .sort((a, b) => parseISO(new Date(a.month).toISOString()) - parseISO(new Date(b.month).toISOString()));
+            .sort((a, b) => (parseISO(new Date(a.month).toISOString()) as any) - (parseISO(new Date(b.month).toISOString()) as any));
 
         setSalesData(formattedSalesData);
         setLoadingChart(false);
 
         // Fetch total customers (not filtered by date range)
-        const usersCollection = collection(db, "users");
+        const usersCollection = collection(db!, "users");
         const usersSnapshot = await getCountFromServer(usersCollection);
 
         setStats({

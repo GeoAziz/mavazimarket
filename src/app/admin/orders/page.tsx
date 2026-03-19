@@ -133,7 +133,7 @@ export default function AdminOrdersPage() {
                       #{order.id.substring(0,8)}...
                     </TableCell>
                     <TableCell className="text-muted-foreground text-xs font-bold uppercase tracking-tighter">
-                      {new Date(order.orderDate).toLocaleDateString()}
+                      {new Date(order.orderDate as any).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-secondary font-medium text-xs">
                       {order.shippingAddress?.street?.substring(0,25) || 'N/A'}

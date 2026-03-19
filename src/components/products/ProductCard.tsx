@@ -19,7 +19,7 @@ import { formatKSh } from '@/lib/utils';
 
 interface ProductCardProps {
   product: Product;
-  onOpenQuickView: (product: Product) => void;
+  onOpenQuickView?: (product: Product) => void;
 }
 
 const GUEST_WISHLIST_LOCAL_STORAGE_KEY = 'mavaziGuestWishlist';
@@ -151,7 +151,7 @@ export function ProductCard({ product, onOpenQuickView }: ProductCardProps) {
           <Button 
             variant="outline" 
             className="w-full font-bold tracking-[0.2em] text-[10px] h-10 border-2 rounded-md" 
-            onClick={(e) => { e.preventDefault(); onOpenQuickView(product); }}
+            onClick={(e) => { e.preventDefault(); onOpenQuickView?.(product); }}
           >
               QUICK VIEW
           </Button>

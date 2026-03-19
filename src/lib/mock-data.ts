@@ -113,20 +113,14 @@ export const mockProducts: Product[] = [
 ];
 
 export const mockReviews: Review[] = [
-  { id: 'review1', userId: 'user123', userName: 'Aisha K.', rating: 5, comment: 'Love this t-shirt! Great quality and fits perfectly.', date: '2023-10-15' },
-  { id: 'review2', userId: 'user456', userName: 'John M.', rating: 4, comment: 'Good jeans, very comfortable. Color is slightly different than pictured.', date: '2023-10-20' },
-  { id: 'review3', userId: 'user789', userName: 'Wanjiku N.', rating: 5, comment: 'This dress is so beautiful, my daughter loves it!', date: '2023-09-05' },
+  { id: 'review1', productId: 'men-basic-tshirt-01', userId: 'user123', userName: 'Aisha K.', rating: 5, comment: 'Love this t-shirt! Great quality and fits perfectly.', date: '2023-10-15' },
+  { id: 'review2', productId: 'men-slim-fit-jeans-02', userId: 'user456', userName: 'John M.', rating: 4, comment: 'Good jeans, very comfortable. Color is slightly different than pictured.', date: '2023-10-20' },
+  { id: 'review3', productId: 'kids-cotton-dress-08', userId: 'user789', userName: 'Wanjiku N.', rating: 5, comment: 'This dress is so beautiful, my daughter loves it!', date: '2023-09-05' },
 ];
-
-// Assign reviews to products
-mockProducts.forEach(p => {
-  if (p.id === 'men-basic-tshirt-01') p.reviews = [mockReviews[0]];
-  if (p.id === 'men-slim-fit-jeans-02') p.reviews = [mockReviews[1]];
-  if (p.id === 'kids-cotton-dress-08') p.reviews = [mockReviews[2]];
-});
 
 export const mockUser: User = {
   id: 'mockuser01',
+  uid: 'mockuser01',
   name: 'Test User',
   email: 'testuser@example.com',
   profilePictureUrl: 'https://placehold.co/100x100.png',
@@ -137,35 +131,42 @@ export const mockUser: User = {
     postalCode: '00100',
     country: 'Kenya',
   },
-  wishlist: [mockProducts[2], mockProducts[4]],
+  wishlist: [mockProducts[2].id, mockProducts[4].id],
 };
 
 export const mockOrders: Order[] = [
   {
     id: 'order001',
+    userId: 'mockuser01',
     orderDate: '2023-10-01T10:30:00Z',
     status: 'Delivered',
     items: [
       { id: 'men-basic-tshirt-01', name: 'Men\'s Basic T-Shirt', price: 1200, quantity: 1, image: 'https://placehold.co/80x80.png' },
       { id: 'men-sneakers-04', name: 'Casual Sneakers', price: 4800, quantity: 1, image: 'https://placehold.co/80x80.png' },
     ],
+    subtotal: 6000,
+    taxes: 0,
+    shippingCost: 0,
     totalAmount: 6000,
     shippingAddress: mockUser.shippingAddress!,
     paymentMethod: 'M-Pesa',
   },
   {
     id: 'order002',
+    userId: 'mockuser01',
     orderDate: '2023-10-15T14:00:00Z',
     status: 'Shipped',
     items: [
       { id: 'women-casual-dress-05', name: 'Casual Floral Dress', price: 3000, quantity: 1, image: 'https://placehold.co/80x80.png' },
     ],
+    subtotal: 3000,
+    taxes: 0,
+    shippingCost: 0,
     totalAmount: 3000,
     shippingAddress: mockUser.shippingAddress!,
     paymentMethod: 'Credit Card',
   },
 ];
-mockUser.orderHistory = mockOrders;
 
 export const mockCartItems: CartItem[] = [
     { id: 'men-basic-tshirt-01', name: 'Men\'s Basic T-Shirt', price: 1200, quantity: 2, image: 'https://placehold.co/100x120.png', size: 'M', color: 'Black' },

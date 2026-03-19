@@ -3,11 +3,35 @@ import * as admin from 'firebase-admin';
 import { mockCategories, mockProducts, mockUser, mockOrders, mockReviews } from '../src/lib/mock-data'; 
 import type { Category, Product as AppProduct, User as AppUser, Order as AppOrder, Review as AppReview } from '../src/lib/types'; 
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const serviceAccount = require('../mavazi-market-firebase-adminsdk-fbsvc-c781dbd1ae.json');
+// ── Guard: never run against production credentials by accident ──────────────
+// Use FIREBASE_ADMIN_SDK_CONFIG_JSON (a JSON string with project_id, private_key,
+// client_email) OR a SEED_ENVIRONMENT=development guard to prevent accidental
+// production seeding.  The hardcoded service-account file must NOT be committed.
+const rawConfig = process.env.FIREBASE_ADMIN_SDK_CONFIG_JSON;
+if (!rawConfig) {
+  console.error(
+    'ERROR: FIREBASE_ADMIN_SDK_CONFIG_JSON environment variable is not set.\n' +
+    'Set it to the JSON string of your Firebase Admin SDK service account.\n' +
+    'Never commit the service-account JSON file to version control.'
+  );
+  process.exit(1);
+}
 
+if (process.env.SEED_ENVIRONMENT !== 'development') {
+  console.error(
+    'ERROR: SEED_ENVIRONMENT is not set to "development".\n' +
+    'To prevent accidental production seeding, set SEED_ENVIRONMENT=development before running this script.'
+  );
+  process.exit(1);
+}
+
+const { project_id, private_key, client_email } = JSON.parse(rawConfig);
 admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
+  credential: admin.credential.cert({
+    projectId: project_id,
+    privateKey: private_key.replace(/\\n/g, '\n'),
+    clientEmail: client_email,
+  }),
 });
 
 const db = admin.firestore();
@@ -41,11 +65,11 @@ async function populateProducts() {
   const productsCollection = db.collection('products');
   for (const product of mockProducts) {
     const { reviews, id, ...productData } = product as any; 
-    const finalProductData: Omit<AppProduct, 'id' | 'reviews'> & { createdAt: any, updatedAt: any} = {
-        ...(productData as Omit<AppProduct, 'id' | 'reviews'>),
+    const finalProductData = {
+        ...(productData as any),
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-    };
+    } as any;
     const productDocRef = await productsCollection.add(finalProductData); 
     console.log(`Added product: ${product.name} (ID: ${productDocRef.id})`);
 
@@ -104,8 +128,8 @@ async function populateUsers() {
           email: adminEmail,
           role: "admin",
           disabled: false,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          createdAt: admin.firestore.FieldValue.serverTimestamp() as any,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp() as any,
         };
         await usersCollection.doc(adminAuthUser.uid).set(adminProfileData, { merge: true });
         console.log(`Stored/updated admin profile for ${adminEmail} in Firestore.`);
@@ -136,16 +160,16 @@ async function populateUsers() {
     }
 
     if (standardAuthUser) {
-        const { id, orderHistory, wishlist, ...userProfileData } = mockUser;
-        const finalUserProfile: Omit<AppUser, 'id' | 'orderHistory'> & { createdAt: any, updatedAt: any } = {
-            ...(userProfileData as Omit<AppUser, 'id' | 'orderHistory' | 'wishlist'>),
+        const { id, wishlist, ...userProfileData } = mockUser;
+        const finalUserProfile: Omit<AppUser, 'id'> & { createdAt: any, updatedAt: any } = {
+            ...(userProfileData as Omit<AppUser, 'id' | 'wishlist'>),
             email: standardUserEmail, 
             name: mockUser.name,
             role: 'user',
             disabled: false,
-            wishlist: (wishlist as AppProduct[])?.map(p => p.id) || [], 
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            wishlist: wishlist || [], 
+            createdAt: admin.firestore.FieldValue.serverTimestamp() as any,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp() as any,
         };
         await usersCollection.doc(standardAuthUser.uid).set(finalUserProfile, { merge: true });
         console.log(`Stored/updated profile for ${mockUser.name} (${standardUserEmail}) in Firestore.`);
@@ -181,10 +205,10 @@ async function populateOrders() {
         const finalOrderData: Omit<AppOrder, 'id'> & {updatedAt: any} = {
             ...(orderData as Omit<AppOrder, 'id'>),
             userId: mockUserAuth.uid,
-            orderDate: admin.firestore.Timestamp.fromDate(new Date(order.orderDate as string)),
+            orderDate: admin.firestore.Timestamp.fromDate(new Date(order.orderDate as string)) as any,
             items: order.items.map(item => ({...item})), 
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        };
+            updatedAt: admin.firestore.FieldValue.serverTimestamp() as any,
+        } as any;
         await ordersCollection.add(finalOrderData); 
         console.log(`Added order for user ${mockUser.email}`);
     }

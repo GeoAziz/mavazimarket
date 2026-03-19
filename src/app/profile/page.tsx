@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
 import { Breadcrumbs } from '@/components/shared/Breadcrumbs';
 import { Edit3, History, Heart, Settings, LogOut, Package, MapPin, Mail, KeyRound, Loader2, UploadCloud, Trash2, Plus, ShieldCheck, ShoppingBag, Eye, EyeOff } from 'lucide-react';
 import { ProductCard } from '@/components/products/ProductCard';
@@ -338,7 +339,7 @@ export default function ProfilePage() {
                           <CardHeader className="bg-secondary/5 p-6 flex flex-row justify-between items-center border-b border-primary/5">
                             <div>
                               <p className="font-bold text-secondary text-sm">ORDER #{order.id.substring(0,8)}</p>
-                              <p className="text-[10px] uppercase tracking-tighter text-muted-foreground font-bold mt-1">CURATED: {new Date(order.orderDate).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                              <p className="text-[10px] uppercase tracking-tighter text-muted-foreground font-bold mt-1">CURATED: {new Date(order.orderDate as any).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
                             </div>
                             <div className="text-right">
                                <span className={`text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-widest border-2 ${

@@ -50,7 +50,7 @@ export default function SignupPage() {
   async function onSubmit(data: SignupFormValues) {
     setIsSubmitting(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, data.email, data.password);
+      const userCredential = await createUserWithEmailAndPassword(auth!, data.email, data.password);
       const user = userCredential.user;
 
       await updateProfile(user, { 

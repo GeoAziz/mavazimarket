@@ -88,8 +88,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setError(null);
       if (user) {
         setCurrentUser(user);
-        const adminEmail = "admin@mixostore.com";
-        setIsAdmin(user.email === adminEmail);
+        // Use custom claims as the single source of truth for admin status.
+        // Force-refresh the token so we always read the latest claims.
+        const idTokenResult = await user.getIdTokenResult(true);
+        setIsAdmin(idTokenResult.claims['admin'] === true);
         
         await fetchAppUser(user.uid);
         // Cart merging/loading will be handled by CartProvider reacting to currentUser

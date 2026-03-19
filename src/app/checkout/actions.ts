@@ -1,10 +1,15 @@
 
 "use server";
 
-import { db } from '@/lib/firebase';
-import { collection, addDoc, serverTimestamp, doc, setDoc } from 'firebase/firestore';
-import type { CartItem, Address, Order } from '@/lib/types';
+import { getAdminFirestore } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
+import type { Address, Order } from '@/lib/types';
 import { sendOrderConfirmationEmail } from '@/lib/emailService';
+
+const TAX_RATE = 0.16;          // 16 % VAT
+const FREE_SHIPPING_THRESHOLD = 3000; // KSh
+const FLAT_SHIPPING_COST = 250; // KSh
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 interface CheckoutFormData {
   fullName: string;
@@ -16,89 +21,184 @@ interface CheckoutFormData {
   paymentMethod: "mpesa" | "card" | "paypal";
 }
 
+/**
+ * Item reference sent from the client – we only trust IDs and quantities.
+ * Prices are always re-fetched from the database.
+ */
+interface CartItemRef {
+  productId: string;
+  quantity: number;
+  size?: string;
+  color?: string;
+}
+
 interface PlaceOrderArgs {
   userId: string | null;
   formData: CheckoutFormData;
-  cartItems: CartItem[];
-  totalAmount: number;
+  cartItemRefs: CartItemRef[];
+  idempotencyKey: string;
 }
 
 /**
- * placeOrderAction - The Core Revenue Generator
- * 
- * This function performs the "Hard Write" to Firestore. 
- * It snapshots the current state of items to ensure price consistency even if the catalog changes.
+ * placeOrderAction – Production-grade checkout handler
+ *
+ * Security guarantees:
+ *  1. Idempotency  – duplicate submissions return the existing order ID.
+ *  2. Server-side totals – prices are always fetched from Firestore; the
+ *     client cannot manipulate the charged amount.
+ *  3. Atomic inventory – stock is decremented inside a transaction so
+ *     concurrent checkouts cannot oversell.
  */
-export async function placeOrderAction(args: PlaceOrderArgs): Promise<{ success: boolean; orderId?: string; error?: string }> {
-  const { userId, formData, cartItems, totalAmount } = args;
+export async function placeOrderAction(
+  args: PlaceOrderArgs
+): Promise<{ success: boolean; orderId?: string; error?: string }> {
+  const { userId, formData, cartItemRefs, idempotencyKey } = args;
 
-  if (!db) {
-    return { success: false, error: "Infrastructure Offline: Database not connected." };
+  if (!idempotencyKey || idempotencyKey.length < 10) {
+    return { success: false, error: "Missing idempotency key." };
   }
 
-  if (!cartItems || cartItems.length === 0) {
+  if (!cartItemRefs || cartItemRefs.length === 0) {
     return { success: false, error: "Validation Failed: Your shopping bag is empty." };
   }
 
-  // 1. Prepare Shipping Payload
+  const adminDb = getAdminFirestore();
+
+  // ── 1. Idempotency check ────────────────────────────────────────────────────
+  const idemKeyRef = adminDb.collection('idempotencyKeys').doc(idempotencyKey);
+  const idemSnap = await idemKeyRef.get();
+  if (idemSnap.exists) {
+    const existing = idemSnap.data()!;
+    if (existing.expiresAt.toMillis() > Date.now()) {
+      // Return the existing order – do NOT create a duplicate.
+      return { success: true, orderId: existing.orderId };
+    }
+    // Key has expired – treat as a new checkout.
+  }
+
+  // ── 2. Fetch current product prices from Firestore (server-side) ───────────
+  type ProductRecord = { id: string; name: string; price: number; stockQuantity: number; images: string[]; slug: string };
+  const productDocs = await Promise.all(
+    cartItemRefs.map(ref => adminDb.collection('products').doc(ref.productId).get())
+  );
+
+  const products: Record<string, ProductRecord> = {};
+  for (const snap of productDocs) {
+    if (!snap.exists) {
+      return { success: false, error: `Product ${snap.id} no longer exists.` };
+    }
+    products[snap.id] = { id: snap.id, ...(snap.data() as Omit<ProductRecord, 'id'>) };
+  }
+
+  // ── 3. Server-side total calculation ──────────────────────────────────────
+  let subtotal = 0;
+  for (const ref of cartItemRefs) {
+    const product = products[ref.productId];
+    if (!product) return { success: false, error: `Product ${ref.productId} not found.` };
+    subtotal += product.price * ref.quantity;
+  }
+  const shippingCost = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : FLAT_SHIPPING_COST;
+  const taxes = (subtotal + shippingCost) * TAX_RATE;
+  const totalAmount = subtotal + shippingCost + taxes;
+
+  // ── 4. Atomic inventory decrement + order creation (transaction) ──────────
   const shippingAddress: Address = {
     street: formData.address,
     city: formData.city,
     postalCode: formData.postalCode || '00100',
     country: 'Kenya',
-    phone: formData.phone
+    phone: formData.phone,
   };
 
-  // 2. Prepare Order Document
-  // Note: We snapshot items here so the order record remains accurate forever
-  const orderData = {
-    userId: userId || 'guest_checkout',
-    orderDate: serverTimestamp(),
-    status: 'Pending' as const,
-    items: cartItems.map(item => ({
-      id: item.id,
-      productId: item.productId || item.id,
-      name: item.name,
-      price: item.price,
-      quantity: item.quantity,
-      image: item.image,
-      size: item.size || 'OS',
-      color: item.color || 'Default',
-      slug: item.slug || ''
-    })),
-    totalAmount,
-    shippingAddress,
-    paymentMethod: formData.paymentMethod,
-    mpesaTransactionId: formData.paymentMethod === 'mpesa' ? `MAV-MPESA-${Date.now().toString().slice(-6)}` : undefined,
-    updatedAt: serverTimestamp(),
-  };
+  const orderItems = cartItemRefs.map(ref => {
+    const product = products[ref.productId];
+    return {
+      id: ref.productId,
+      productId: ref.productId,
+      name: product.name,
+      price: product.price,
+      quantity: ref.quantity,
+      image: product.images?.[0] ?? '',
+      size: ref.size || 'OS',
+      color: ref.color || 'Default',
+      slug: product.slug || '',
+    };
+  });
 
   try {
-    // 3. Persist to Firestore
-    const ordersRef = collection(db, "orders");
-    const docRef = await addDoc(ordersRef, orderData);
-    
-    // 4. Trigger Transactional Confirmation (Non-blocking)
-    const confirmedOrderForEmail: Order = {
-      ...orderData,
-      id: docRef.id,
-      orderDate: new Date().toISOString(), // String representation for the email template
+    const orderRef = adminDb.collection('orders').doc();
+
+    await adminDb.runTransaction(async (trx) => {
+      // Re-read stock inside the transaction to prevent race conditions.
+      const productSnapshots = await Promise.all(
+        cartItemRefs.map(ref => trx.get(adminDb.collection('products').doc(ref.productId)))
+      );
+
+      for (let i = 0; i < cartItemRefs.length; i++) {
+        const snap = productSnapshots[i];
+        const ref = cartItemRefs[i];
+        const currentStock: number = snap.data()?.stockQuantity ?? 0;
+        if (currentStock < ref.quantity) {
+          throw new Error(
+            `"${snap.data()?.name ?? ref.productId}" is out of stock (requested ${ref.quantity}, available ${currentStock}).`
+          );
+        }
+        trx.update(snap.ref, { stockQuantity: currentStock - ref.quantity });
+      }
+
+      // Write the order document (totalAmount set by server – NOT trusted from client).
+      trx.set(orderRef, {
+        userId: userId || 'guest_checkout',
+        orderDate: FieldValue.serverTimestamp(),
+        status: 'Pending' as const,
+        items: orderItems,
+        subtotal,
+        shippingCost,
+        taxes,
+        totalAmount,
+        shippingAddress,
+        paymentMethod: formData.paymentMethod,
+        idempotencyKey,
+        mpesaTransactionId:
+          formData.paymentMethod === 'mpesa'
+            ? `MAV-MPESA-${Date.now().toString().slice(-6)}`
+            : undefined,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+
+    // ── 5. Store idempotency key (TTL = 24 h) ────────────────────────────────
+    await idemKeyRef.set({
+      orderId: orderRef.id,
+      createdAt: FieldValue.serverTimestamp(),
+      expiresAt: new Date(Date.now() + IDEMPOTENCY_TTL_MS),
+    });
+
+    // ── 6. Non-blocking confirmation email ───────────────────────────────────
+    const emailOrder: Order = {
+      id: orderRef.id,
+      userId: userId || 'guest_checkout',
+      orderDate: new Date().toISOString(),
+      status: 'Pending',
+      items: orderItems,
+      subtotal,
+      shippingCost,
+      taxes,
+      totalAmount,
+      shippingAddress,
+      paymentMethod: formData.paymentMethod,
+      idempotencyKey,
       updatedAt: new Date().toISOString(),
-    } as any;
-
-    // We don't await the email to ensure the user gets a fast redirect
-    sendOrderConfirmationEmail(formData.email, confirmedOrderForEmail, formData.fullName)
-      .catch(e => console.error("Transactional Email Failed:", e));
-
-    return { 
-      success: true, 
-      orderId: docRef.id 
     };
-  } catch (error: any) {
-    console.error("Critical Logistics Failure during checkout:", error);
-    return { 
-      success: false, 
-      error: error.message || "A logistics error occurred while archiving your order. Our team has been notified." 
-    };
+
+    sendOrderConfirmationEmail(formData.email, emailOrder, formData.fullName).catch(e =>
+      console.error('Transactional Email Failed:', e)
+    );
+
+    return { success: true, orderId: orderRef.id };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'A logistics error occurred.';
+    console.error('Critical Logistics Failure during checkout:', error);
+    return { success: false, error: message };
   }
 }
